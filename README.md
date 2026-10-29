@@ -22,7 +22,9 @@
 > [Issues](https://github.com/Xtopia5616/PCL-Patcher/issues) 联系，说明涉及的内容、
 > 权利依据与联系方式；核实后会在合理时间内删除或调整相关内容。
 
-Plain Craft Launcher (PCL) 的第三方 IL 补丁工具：解锁下载与联机入口，不涉及赞助内容。
+Plain Craft Launcher (PCL) 的第三方 IL 补丁工具：给 **下载** 和 **联机** 两块功能打补丁
+（恢复被移除的下载入口、修掉官方源连不上时的资源列表、替换联机页里指向已停服节点的
+文案与按钮），不涉及赞助内容。
 
 许可证：[MIT](LICENSE)（原创部分；PCL 派生文件除外） · 免责声明：[DISCLAIMER.md](DISCLAIMER.md) ·
 第三方说明：[NOTICE.md](NOTICE.md)
@@ -40,6 +42,19 @@ Plain Craft Launcher (PCL) 的第三方 IL 补丁工具：解锁下载与联机�
   **没有**隶属、合作、赞助或授权关系。
 
 > 只需要下载功能时，请取消勾选“同时解锁联机”；这样补丁不会写入联机相关逻辑。
+
+## 最近更新
+
+- **解锁范围可选**：默认「下载 + 联机」，取消勾选则只解锁下载（命令行 `--download-only`）。
+  只解锁下载时 `PatchPlan` 里不会出现联机步骤，也不会触碰 `PageLinkMain` / `PageSetupUI`。
+- **“官方源”可用**：新增 `CurseForgeMirror`，把 CurseForge API 请求改走 PCL 自带的
+  MCIMirror 反代。官方 API 被重置（`由于远程方已关闭传输流`）时，「下载 → 整合包 / Mod /
+  数据包 / 资源包 / 光影包」列表不再只剩 Modrinth 的结果；只代理 API，文件仍直连 CDN。
+- **联机页文案与按钮**：示例文本按钮换成“官方节点已暂停服务 / 可自建节点”的说明，
+  「设置 → 联机 → 自定义节点」的悬停说明改写成自建指引，隐藏已下线的“节点状态”按钮，
+  把“贡献节点”换成 EasyTier 官网链接。
+- **首次使用与定位**：首次启动先确认免责声明（按条款版本记录）；“自动检测”按上次路径 →
+  快捷方式 → 注册表 → 常见目录逐级查找 PCL；GUI 默认请求管理员权限，补丁 / 还原不再二次提权。
 
 <p align="center">
   <img src="assets/screenshot/gui.png" width="820" alt="PCL Patcher 主界面：选择 PCL 主程序、校验版本指纹、执行补丁步骤">
@@ -251,7 +266,7 @@ GUI 默认以管理员权限启动（`app.manifest` 的 `requireAdministrator`�
 | `--restore` | 从 `<源文件>.bak` 还原 |
 | `--force` | 绕过未知哈希 / 指纹校验 |
 | `--allow-partial` | 缺失 required 步骤时继续（仅用于新版本探测） |
-| `--download-only` | 只解锁下载，跳过五个联机补丁步骤 |
+| `--download-only` | 只解锁下载，跳过七个联机补丁步骤 |
 | `--no-update` | 把 `ModSecret.UpdateStart` 改成 `ret`，禁用自更新 |
 | `--no-stop` | 不自动结束正在运行的 PCL |
 | `--fingerprints` | 打印关键方法指纹 |
@@ -276,7 +291,7 @@ GUI 默认以管理员权限启动（`app.manifest` 的 `requireAdministrator`�
 | `LinkPeerButtons` | 隐藏“节点状态”按钮，把“贡献节点”按钮换成 EasyTier 官网链接（仅联机范围） |
 | `DisableSelfUpdate` | 可选：`--no-update` 时 stub 掉自更新 |
 
-`RestoreLinkEntry` 起五个联机步骤只在勾选“同时解锁联机”时执行；命令行加
+`RestoreLinkEntry` 起七个联机步骤只在勾选“同时解锁联机”时执行；命令行加
 `--download-only` 等价于取消勾选，只应用下载相关步骤。
 
 选择联机范围时也**默认不带节点**：补丁只恢复入口和解除配置拦截，使用前必须在

@@ -53,7 +53,7 @@ PCL.ModSecret::RestrictMcDownload  literal=True  const=True
 | `LinkPeerHint` | `PageSetupLink.InitializeComponent` 加载后改写“自定义节点”输入框的 ToolTip（原文案还在推荐已停服的公共节点） |
 | `DisableSelfUpdate` | 可选 `--no-update`：把 `ModSecret.UpdateStart` 直接 `ret`，防止更新器覆盖补丁 |
 
-`RestoreLinkEntry` 起五个联机步骤只有在启用联机范围时才加入 PatchPlan；
+`RestoreLinkEntry` 起七个联机步骤只有在启用联机范围时才加入 PatchPlan；
 `--download-only` 会跳过它们，不会触碰 `PageLinkMain` / `PageSetupUI`。
 CurseForge 镜像属于下载组，`--download-only` 仍会应用。
 
@@ -226,7 +226,7 @@ Dialogs.SelectFile("选择整合包压缩文件", False, Nothing, Nothing)
 
 ### 5.1 联机（无默认节点）
 
-联机属于可选范围：只有勾选“同时解锁联机”才会写入以下五个步骤。联机部分
+联机属于可选范围：只有勾选“同时解锁联机”才会写入以下七个步骤。联机部分
 **不内置任何节点**，也不尝试恢复官方节点列表（`uptime.easytier.cn` 与
 `easytier.meloong.com` 均已失效）。打上补丁后：
 
@@ -294,6 +294,37 @@ Dialogs.SelectFile("选择整合包压缩文件", False, Nothing, Nothing)
 - `PageSetupUI.HiddenRefresh` 的写死可见性意味着“设置 → 界面 → 隐藏联机页”开关
   不再生效。
 
+### 5.2 CurseForge 与“官方源”
+
+- **现象**：下载页的“整合包 / Mod / 数据包 / 资源包 / 光影包”列表由 `ResourceSearcher`
+  同时查 CurseForge 和 Modrinth。搜索用的是写死的 `https://api.curseforge.com/...`，
+  **不经过** `ModDownload.DlModRequest` 的“官方源 → 镜像源”回退，所以官方 API 一旦连不上
+  （日志常见 `由于远程方已关闭传输流，身份验证失败`），列表就只剩 Modrinth 的内容，
+  PCL 还会提示“无法连接到 CurseForge……”。
+- **PCL 自带的镜像**：`ModDownload.DlSourceModGet` 里已经有
+  `api.curseforge.com → mod.mcimirror.top/curseforge` 的替换，但只用于图标、文件地址等
+  少数调用，不覆盖搜索与详情。
+- **补丁做法**：在 `PCL.ModNet.SendRequest(string Url, …)` 入口插入 5 条 IL：
+  ```
+  ldarg.0
+  ldstr "https://api.curseforge.com"
+  ldstr "https://mod.mcimirror.top/curseforge"
+  callvirt System.String::Replace(System.String, System.String)
+  starg Url
+  ```
+  `SendRequest` 是所有 API 请求的公共入口（搜索、详情、版本列表、指纹查询都走它），
+  改写一次即可覆盖全部 CurseForge API 调用；文件 CDN（`edge.forgecdn.net` /
+  `mediafilez.forgecdn.net`）不在改写范围，仍然直连。
+- **副作用与取舍**：
+  - 改写是无条件的：即使官方 API 当前可连通也会走反代（PCL 自己的安装流程在选择
+    “镜像源”时用的也是这套映射）。
+  - 改写发生在 `SecretHeadersSign` 之前，`x-api-key` 不会再被加上；MCIMirror 不校验该头，
+    实测 `v1/mods/search`、`v1/mods/{id}`、`v1/mods/{id}/files`、`v1/fingerprints/432`
+    都返回 200。
+  - 反代由第三方维护，若其下线需要换地址，或改回官方直连。
+- **实测**（2.99.0.1，2026-10）：打补丁后点开“下载 → 整合包”，`开始 CurseForge 搜索`
+  后约 2 秒返回 40 个工程，列表共 80 条；同一台机器上未打补丁时官方 API 会 TLS 被重置。
+
 ## 6. 构建与运行
 
 默认**原地替换源文件**，替换前自动备份为 `<源文件>.bak`；只有显式传入第二个路径时才写到副本。
@@ -332,7 +363,7 @@ dotnet build .\src\PclPatcher\PclPatcher.csproj -c Release
 --dry-run              # 只应用 + 校验，不写文件
 --force                # 绕过已知哈希/指纹校验
 --allow-partial        # 缺失 required 步骤时跳过继续（用于新版本探测）
---download-only        # 只解锁下载，跳过联机五步
+--download-only        # 只解锁下载，跳过联机七步
 --no-update            # 把 ModSecret.UpdateStart 改成 ret，禁用自更新
 --no-stop              # 不自动结束正在运行的 PCL
 --fingerprints         # 打印关键方法指纹，供新版本适配
@@ -404,7 +435,7 @@ PCL 风格的圆形高亮 + 轻阴影，窗口不提供最大化按钮（与 PCL
 
 页面分为三页：
 
-- **补丁**：主程序 / 输出 / 选项，右侧是 10 步补丁流程与运行环境；窗口变窄时自动收成单列；
+- **补丁**：主程序 / 输出 / 选项，右侧是完整的补丁流程与运行环境（步骤随解锁范围增减）；窗口变窄时自动收成单列；
 - **日志**：实时彩色日志、自动滚动、复制、清空；patcher 的启动横幅（署名 + 题记
   “Some birds aren't meant to be caged…”）会作为每次运行的日志开头；
 - **关于**：应用信息、龙腾猫跃署名、PCL 项目与许可、Minecraft 正版提示。
@@ -481,7 +512,7 @@ Copy-Item "D:\Minecraft\Plain Craft Launcher 2.exe" .\PCL-inplace.exe
 .\dist\PclPatcher.exe .\PCL-inplace.exe --restore  # 从 .bak 还原
 ```
 
-GUI 的手工回归：拖入副本 → 开始补丁 → 日志页应依次出现 9 个 `patch :` 步骤与
+GUI 的手工回归：拖入副本 → 开始补丁 → 日志页应依次出现 13 个 `patch :` 步骤（`--no-update` 时为 14 个）与
 `verify : output reloaded`；再点“还原备份”，源文件 SHA-256 应回到原始值。
 
 不开界面就能验证 IL 合法性：用 Windows PowerShell 5.1（.NET Framework）加载补丁产物，
@@ -528,7 +559,7 @@ Patcher 只改 code-behind 里对 UI 属性的赋值：
 | `PageSetupUI.HiddenRefresh` / `PageLinkMain.InitializeComponent` | 恢复联机页签/设置项，并把示例文本换成节点说明 |
 
 现在默认会恢复上述所有 UI 入口；如果只想恢复“原版游戏”下载页，可以取消勾选
-“同时解锁联机”（命令行 `--download-only`），此时不会应用联机五个步骤。
+“同时解锁联机”（命令行 `--download-only`），此时不会应用联机七个步骤。
 
 ## 10. 对 IL 形状的依赖
 
