@@ -13,6 +13,17 @@ Plain Craft Launcher (PCL) 的第三方 IL 补丁工具。仓库只保留两个�
 > 可随时还原；不修改 PCL 官方发布，也不分发修改版。补丁后的 PCL 属于 PCL 的
 > 修改版，请勿再分发。
 
+## 下载
+
+预编译产物见 [Releases](https://github.com/Xtopia5616/PCL-Patcher/releases)：
+
+| 文件 | 说明 |
+|---|---|
+| `PclPatcher.Gui.Net48.exe` | 单文件 GUI（.NET Framework 4.8），内嵌补丁器，双击即用 |
+| `PclPatcher.exe` | 自包含命令行补丁器（win-x64 single-file），无需预装 .NET |
+
+GUI 运行需要本机已安装 PCL。仓库源码本身不包含 PCL 本体，构建说明见下文。
+
 ## 目录结构
 
 ```text
