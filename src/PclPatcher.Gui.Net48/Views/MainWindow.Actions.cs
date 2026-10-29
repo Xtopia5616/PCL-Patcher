@@ -115,12 +115,14 @@ public partial class MainWindow : Window
                 ? "已有备份：\n" + backup + "\n（继续使用该备份，不会覆盖）"
                 : "将自动备份为：\n" + backup;
             var message = alreadyPatched
-                ? "源文件已经是补丁状态，继续只会重新校验，不会重复写入。\n\n" + backupText
+                ? "源文件已经是补丁状态。\n\n" +
+                  "重新补丁会先还原原版，再按当前选项重新应用，旧补丁不会叠加。\n" +
+                  "改过“同时解锁联机 / 禁用更新”后，直接再点开始补丁即可。\n\n" + backupText
                 : "补丁会直接替换源文件：\n" + fullSource + "\n\n补丁范围：" + scope + "\n\n" + backupText +
                   "\n\n补丁后可用“还原备份”恢复原版。";
             var confirm = PclDialog.Show(this,
-                alreadyPatched ? "已是补丁状态" : "替换源文件",
-                message, "继续", "取消", DialogTone.Question);
+                alreadyPatched ? "重新补丁" : "替换源文件",
+                message, alreadyPatched ? "还原并重新补丁" : "继续", "取消", DialogTone.Question);
             if (!confirm) return;
         }
         else if (!inPlace && File.Exists(fullOutput) && _dryRunBox.Checked != true)

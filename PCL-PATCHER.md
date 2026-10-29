@@ -419,7 +419,8 @@ dotnet build .\src\PclPatcher\PclPatcher.csproj -c Release
 ```
 
 首次运行会先备份、再原子替换；日志里的 `backup :` 就是可还原的 `.bak`。
-对已打补丁的文件重复运行只会重新校验，不会再次写入，也不会覆盖备份。
+对已打补丁的文件再次运行会先从 `.bak` 还原原版，再按当前参数重新补丁：这样改过
+`--download-only` / `--no-update` 后不会把新选项叠在旧补丁上，`.bak` 也不会被覆盖。
 
 还原：
 
@@ -586,7 +587,9 @@ Patcher 内置：
 - 临时文件写入 → 重新加载 → 逐步骤 Verify → 备份原文件并校验 → 原子替换；
 - 备份只在需要时创建：已有 `.bak` 不覆盖；源文件是已知原版而备份过期时才刷新；
 - `--restore` 先校验备份的 SHA-256 与 `PCL.ModMain` 类型，再经临时文件原子还原；
-- 已打补丁的文件再次运行只返回 `already`，不会重复写入；
+- 已打补丁的文件再次运行会从 `.bak` 原版重新补丁，不叠加旧补丁；`.bak` 原样保留；
+  “已补丁”必须同时满足“源文件哈希未知 + `.bak` 是已知原版 + 三个必选下载锚点已是
+  补丁形状”，避免把“新 PCL 旁边留着旧 `.bak`”误当成补丁产物而被还原成旧版本；
 - `MaxStackCalculator` 计算最大栈深；
 - 全模块 IL 校验：分支/switch 目标、异常处理边界、空方法体；
 - 参数索引校验：`ldarg.*` 超出方法实参槽位（典型是往静态方法里塞 `ldarg.0`）立即中止——
@@ -603,7 +606,8 @@ Patcher 内置：
 Copy-Item "D:\Minecraft\Plain Craft Launcher 2.exe" .\PCL-inplace.exe
 
 .\dist\PclPatcher.exe .\PCL-inplace.exe            # 原地补丁，生成 .bak
-.\dist\PclPatcher.exe .\PCL-inplace.exe --dry-run  # 已打补丁：只校验，不写盘
+.\dist\PclPatcher.exe .\PCL-inplace.exe --dry-run  # 已补丁：按 .bak 原版探测，不写盘
+.\dist\PclPatcher.exe .\PCL-inplace.exe --no-update # 改选项再补：先还原原版，结果等同全新补丁
 .\dist\PclPatcher.exe .\PCL-inplace.exe --restore  # 从 .bak 还原
 ```
 
@@ -664,7 +668,8 @@ Patcher 只改 code-behind 里对 UI 属性的赋值：
 2. **语义锚点**：`PageSelectLeft` 的 local 不再写死 `Ldloc_1`，而是从 `stloc` 指令取实际 Local；`ModpackInstall` 会校验 `ldstr + newobj + throw` 三连，并从 `finally` handler 的 `HandlerStart` 找外层 finally，而不是硬算偏移。
 3. **版本适配表**：`Profiles` 保存 `2.99.0.0` / `2.99.0.1` 的 SHA-256 和各自的 7 个方法指纹；未知版本允许 `--dry-run` 探测，写盘需要 `--force`。
 4. **失败关闭**：ctor 必须 4/4、ExtraUi 的 5 个站点必须逐个 Verify 通过、Modpack 必须找到限制 throw；数量不对立即中止，不写半坏文件。
-5. **幂等**：对已打补丁的 exe 再跑，`Probe` 会返回 `AlreadyPatched`，不会重复应用。
+5. **幂等**：对已打补丁的 exe 再跑，会先从 `.bak` 还原原版再应用，结果与全新补丁一致；
+   没有可用备份时 `Probe` 返回 `AlreadyPatched`，不会重复应用。
 
 仍然依赖 2.99.0.0 / 2.99.0.1 的部分：
 

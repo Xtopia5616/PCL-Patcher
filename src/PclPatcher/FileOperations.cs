@@ -5,6 +5,35 @@ internal static partial class Program
     private const string BackupSuffix = ".bak";
 
     /// <summary>
+    /// Returns the profile of the pristine build an already patched source came
+    /// from, or null when the source is not a patched copy this tool can rebuild.
+    /// The hash pair alone is not proof: replacing PCL with a newer build while an
+    /// old <c>.bak</c> stays behind also produces "unknown source + known backup",
+    /// and rebuilding that from the backup would silently downgrade the launcher.
+    /// The patched IL shapes have to confirm it (see <see cref="LooksPatched"/>).
+    /// </summary>
+    private static PclProfile? DetectPatchedSource(string source, string sourceHash, string backup)
+    {
+        if (Profiles.Any(p => p.Sha256 == sourceHash)) return null;
+
+        if (!File.Exists(backup)) return null;
+        var backupProfile = Profiles.FirstOrDefault(p => p.Sha256 == Sha256(backup));
+        if (backupProfile is null) return null;
+
+        try
+        {
+            using var module = ModuleDefMD.Load(source);
+            return LooksPatched(module) ? backupProfile : null;
+        }
+        catch (Exception)
+        {
+            // Unreadable or unexpected binary: let the normal resolution path
+            // report it instead of guessing here.
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Decides which profile a source file follows. Resolution order matters:
     /// an exact sha256 is the strongest signal; a matching <c>.bak</c> means the
     /// source is already patched; and a build whose seven anchor fingerprints all

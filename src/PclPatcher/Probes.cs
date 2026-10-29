@@ -5,6 +5,28 @@ internal static partial class Program
     // ---------------------------------------------------------------------
     // Capability probes: never mutate; decide whether a step is applicable.
     // ---------------------------------------------------------------------
+
+    /// <summary>
+    /// True when the module carries this tool's download patch: the three required
+    /// anchors are already in their patched shape. Used to tell a patched copy
+    /// apart from a newer executable that merely sits next to an old <c>.bak</c>;
+    /// a build without the patch reports Ready for these steps instead.
+    /// </summary>
+    private static bool LooksPatched(ModuleDef module)
+    {
+        try
+        {
+            return ProbeDownloadLeftCtor(module).State == PatchState.AlreadyPatched
+                   && ProbeModifyCard(module).State == PatchState.AlreadyPatched
+                   && ProbeLoaderInit(module).State == PatchState.AlreadyPatched;
+        }
+        catch (Exception)
+        {
+            // Missing types/methods mean "not a patched copy of a known build".
+            return false;
+        }
+    }
+
     private static ProbeResult ProbeDownloadLeftCtor(ModuleDef module)
     {
         var ctor = FindMethod(FindType(module, "PCL.PageDownloadLeft"), ".ctor");

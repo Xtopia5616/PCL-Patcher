@@ -78,12 +78,30 @@ internal static partial class Program
         var sourceHash = Sha256(source);
         var plan = BuildPlan(noUpdate, includeLink: !downloadOnly);
 
-        using var module = ModuleDefMD.Load(source);
-        var resolution = ResolveBuild(module, source, sourceHash, backup, force, dryRun);
+        // Re-patching a patched copy must not stack the new option set on the old
+        // one: switching back to --download-only would leave the link steps in
+        // place, and dropping --no-update could not bring the updater back.
+        // Rebuild from the pristine .bak instead. This is the "restore the
+        // original, then patch once" flow, but it never leaves a window where the
+        // source is restored-only: the backup is the patch input and the source is
+        // replaced once at the end.
+        var patchedProfile = DetectPatchedSource(source, sourceHash, backup);
+        var basePath = patchedProfile is null ? source : backup;
+        var baseHash = patchedProfile?.Sha256 ?? sourceHash;
+
+        using var module = ModuleDefMD.Load(basePath);
+        var resolution = ResolveBuild(module, basePath, baseHash, backup, force, dryRun);
         var profile = resolution.Profile;
         var sourceIsKnownOriginal = resolution.IsKnownOriginal;
 
         Console.WriteLine($"source : {source}");
+        if (patchedProfile is not null)
+        {
+            Console.WriteLine(inPlace
+                ? $"state  : 已是补丁状态（备份匹配 {patchedProfile.Label}）；先还原原版，再按当前选项重新补丁"
+                : $"state  : 已是补丁状态（备份匹配 {patchedProfile.Label}）；从原版重新补丁，源文件不变");
+            Console.WriteLine($"base   : {backup} (sha256 {baseHash})");
+        }
         Console.WriteLine($"mode   : {(inPlace ? "in-place, source will be replaced" : "separate output file")}");
         Console.WriteLine($"scope  : {(downloadOnly ? "download only" : "download + link")}");
         Console.WriteLine($"output : {output}");
@@ -183,7 +201,10 @@ internal static partial class Program
 
             if (inPlace)
             {
-                PrepareBackup(source, backup, sourceHash, sourceIsKnownOriginal);
+                // The pristine content being patched, not necessarily the current
+                // source: a re-patch starts from .bak, so that backup is already
+                // the right one and must be reused instead of reported as stale.
+                PrepareBackup(source, backup, baseHash, sourceIsKnownOriginal);
                 ReplaceFile(temp, output);
             }
             else

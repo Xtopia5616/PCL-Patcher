@@ -211,7 +211,9 @@ GUI：
    取消勾选则**只解锁下载**。“禁用更新”**默认勾选**，否则打好的旧版本会在启动时
    被 PCL 自更新换回新版（例如 2.99.0.0 被换成 2.99.0.1）。随后点“开始补丁”，
    先结束正在运行的 PCL，再自动备份为 `.bak` 并原子替换；
-5. 随时用“还原备份”恢复原版。
+5. 如果源文件已经是补丁状态（例如刚改过补丁选项），再点“开始补丁”会**先还原
+   `.bak` 里的原版，再按当前选项重新补丁**，旧补丁不会残留；备份原样保留；
+6. 随时用“还原备份”恢复原版。
 
 用过的路径会记在 `%LOCALAPPDATA%\PclPatcher\settings.json`（最多 5 条），下次启动
 优先复查，通常不需要再点“自动检测”。同一文件也记录已确认的免责声明版本与确认时间；
@@ -234,6 +236,9 @@ GUI 默认以管理员权限启动（`app.manifest` 的 `requireAdministrator`�
 
 # 只解锁下载，跳过联机相关补丁
 .\dist\PclPatcher.exe "D:\Minecraft\Plain Craft Launcher 2.exe" --download-only
+
+# 已补丁的文件改选项再补：自动先还原 .bak 原版，再按当前参数重新应用
+.\dist\PclPatcher.exe "D:\Minecraft\Plain Craft Launcher 2.exe" --no-update
 
 # 只探测，不写文件
 .\dist\PclPatcher.exe "D:\Minecraft\Plain Craft Launcher 2.exe" --dry-run
@@ -284,7 +289,8 @@ GUI 默认以管理员权限启动（`app.manifest` 的 `requireAdministrator`�
 详见 [PCL-PATCHER.md](PCL-PATCHER.md) 的「5.1 联机（无默认节点）」。
 
 每一步都有 `Probe`（不修改模块）、`Apply`、`Verify`；写盘前做全模块 IL 校验，
-写盘后重新加载再校验。已打补丁的文件再次运行会直接返回 `already`。
+写盘后重新加载再校验。源文件已打过补丁时再次补丁，会先从 `.bak` 还原原版再按当前
+选项从头应用（不叠加旧补丁），所以改了补丁选项后直接再补丁即可。
 
 <p align="center">
   <img src="assets/screenshot/flow.png" width="420" alt="补丁流程面板：步骤依次 Probe / Apply / Verify">

@@ -517,7 +517,7 @@ public partial class MainWindow : Window
         var name = string.IsNullOrEmpty(_lastBackupPath) ? "源文件.bak" : IOPath.GetFileName(_lastBackupPath);
         if (_lastBackupKnown && !_lastKnown)
         {
-            _backupHint.Text = "源文件已是补丁状态；原版已备份为 " + name + "，可随时还原。";
+            _backupHint.Text = "源文件已是补丁状态；原版已备份为 " + name + "，再次补丁会先还原原版再重新应用。";
             _backupHint.Foreground = PclUi.Frozen(PclUi.Accent);
         }
         else if (_lastKnown)
