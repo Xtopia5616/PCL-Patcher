@@ -258,9 +258,15 @@ internal sealed class PclFinderWindow : Window
         meta.Append(string.IsNullOrEmpty(candidate.Version) ? "未知版本" : candidate.Version);
         meta.Append(" · ").Append((candidate.Size / 1024d / 1024d).ToString("F1", CultureInfo.InvariantCulture)).Append(" MB");
         meta.Append(" · ").Append(candidate.Source);
-        if (candidate.HasBackup) meta.Append(" · 已打过补丁");
-        var metaBlock = PclUi.Label(meta.ToString(), 11, candidate.HasBackup ? PclUi.Accent : PclUi.Muted);
+        // The .bak outlives a restore, so it only counts as "patched" while the
+        // exe still differs from it; otherwise say what is actually there.
+        var isPatched = candidate.IsPatched;
+        if (isPatched) meta.Append(" · ").Append(PclPatchState.PatchedLabel);
+        else if (candidate.HasBackup) meta.Append(" · ").Append(PclPatchState.RestoredLabel);
+        var metaBlock = PclUi.Label(meta.ToString(), 11, isPatched ? PclUi.Accent : PclUi.Muted);
         metaBlock.Margin = new Thickness(0, 3, 0, 0);
+        if (!isPatched && candidate.HasBackup)
+            metaBlock.ToolTip = "源文件与同名 .bak 内容一致，说明已还原；.bak 会保留，方便再次补丁或改版本。";
         text.Children.Add(metaBlock);
 
         Grid.SetColumn(text, 1);
@@ -304,7 +310,10 @@ internal sealed class PclFinderWindow : Window
     private void Confirm()
     {
         if (string.IsNullOrEmpty(_selectedPath)) return;
-        Close();
+
+        // ShowDialog() only returns true when DialogResult is set; calling Close()
+        // alone leaves it null, so the caller silently kept the previous source.
+        DialogResult = true;
     }
 
     private void Browse_Click()

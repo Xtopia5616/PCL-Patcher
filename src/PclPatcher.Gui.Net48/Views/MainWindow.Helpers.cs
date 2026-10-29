@@ -93,7 +93,7 @@ public partial class MainWindow : Window
         try
         {
             var args = new List<string>(_patcherPrefix) { "--profiles" };
-            var output = await Task.Run(() => RunProfilesCommand(host, args)).ConfigureAwait(true);
+            var output = await Task.Run(() => RunPatcherCommand(host, args)).ConfigureAwait(true);
             ApplyVersionCatalog(PclVersionCatalog.Parse(output));
         }
         catch
@@ -106,7 +106,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private static string RunProfilesCommand(string host, List<string> args)
+    private static string RunPatcherCommand(string host, List<string> args)
     {
         var psi = new ProcessStartInfo(host)
         {
@@ -135,16 +135,50 @@ public partial class MainWindow : Window
         return output;
     }
 
+    /// <summary>
+    /// Asks the patcher whether a hash we do not know is structurally identical to
+    /// a supported build (a snapshot rebuild). Returns the build label, for
+    /// example "2.99.0.0 快照版", or null when the file really is unrelated.
+    /// The GUI cannot do this itself: the fingerprints live in the patcher.
+    /// </summary>
+    private async Task<string> IdentifyStructuralAsync(string path)
+    {
+        var host = _patcherPath;
+        if (string.IsNullOrEmpty(host)) return null;
+
+        var args = new List<string>(_patcherPrefix) { path, "--identify" };
+        string output;
+        try
+        {
+            output = await Task.Run(() => RunPatcherCommand(host, args)).ConfigureAwait(true);
+        }
+        catch
+        {
+            return null;
+        }
+
+        var fields = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var raw in output.Split('\n'))
+        {
+            var line = raw.TrimEnd('\r');
+            var tab = line.IndexOf('\t');
+            if (tab <= 0) continue;
+            fields[line.Substring(0, tab)] = line.Substring(tab + 1).Trim();
+        }
+
+        if (!fields.TryGetValue("match", out var match) || match != "structural") return null;
+        fields.TryGetValue("build", out var build);
+        return string.IsNullOrEmpty(build) ? "结构指纹匹配" : build;
+    }
+
     private void ApplyVersionCatalog(PclVersionCatalog catalog)
     {
         _catalog = catalog;
-        if (_versionBox is not null)
+        if (_versionText is not null)
         {
-            _versionBox.Items.Clear();
-            _versionBox.Items.Add(catalog.SupportLabel);
-            _versionBox.SelectedIndex = 0;
-            _versionBox.ToolTip = catalog.DetailText;
-            AutomationProperties.SetHelpText(_versionBox, catalog.DetailText);
+            _versionText.ToolTip = "自动识别所选 PCL 的版本，不支持手动选择。" + Environment.NewLine + catalog.DetailText;
+            AutomationProperties.SetHelpText(_versionText, "自动识别所选 PCL 的版本，不支持手动选择。 " + catalog.DetailText);
+            SyncVersionSelection();
         }
         if (_versionPillLabel is not null)
             _versionPillLabel.Text = catalog.SupportLabel;
@@ -153,10 +187,59 @@ public partial class MainWindow : Window
         {
             _lastKnown = catalog.Matches(_lastHash);
             _lastBackupKnown = catalog.Matches(_lastBackupHash);
+            // A profile added since the last identify makes the fallback obsolete.
+            if (_lastKnown || _lastBackupKnown) _structuralLabel = null;
             RefreshHashBadge();
             SetBackupHint(_restoreAvailable);
             RefreshLaunchReadiness();
         }
+    }
+
+    /// <summary>
+    /// Points the version row at the build actually sitting in the source box:
+    /// the plain hash first, then the hash of the matching <c>.bak</c> (a patched
+    /// copy no longer matches any profile). Falls back to an explicit
+    /// “未识别版本” item instead of silently showing the oldest profile.
+    /// </summary>
+    /// <summary>
+    /// Writes the build actually sitting in the source box into the read-only
+    /// version field: the plain hash first, then the hash of the matching
+    /// <c>.bak</c> (a patched copy no longer matches any profile). Anything else
+    /// is shown as an explicit “未识别版本”.
+    /// </summary>
+    private void SyncVersionSelection()
+    {
+        if (_versionText is null) return;
+
+        if (!_catalog.IsLoaded)
+        {
+            _versionText.Text = "正在检测版本…";
+            return;
+        }
+
+        // No source selected yet: leave the field blank instead of claiming a build.
+        if (_lastHash is null && _lastBackupHash is null)
+        {
+            _versionText.Text = string.Empty;
+            return;
+        }
+
+        _versionText.Text = SelectVersionLabel();
+    }
+
+    /// <summary>
+    /// Version row text for the current source. A known hash (or a known .bak)
+    /// wins; otherwise an unlisted build matched by structural fingerprints is
+    /// shown with that profile, e.g. "2.99.0.0 快照版（结构匹配）".
+    /// </summary>
+    private string SelectVersionLabel()
+    {
+        if (!_catalog.IsLoaded) return "正在检测版本…";
+        if (_lastHash is null && _lastBackupHash is null) return string.Empty;
+
+        if (!_lastKnown && !_lastBackupKnown && !string.IsNullOrEmpty(_structuralLabel))
+            return _structuralLabel + "（结构匹配）";
+        return _catalog.SelectLabel(_lastHash, _lastBackupHash);
     }
 
     private string FindPatcher()
@@ -361,10 +444,5 @@ public partial class MainWindow : Window
     private static string Quote(string value)
         => "\"" + (value ?? string.Empty).Replace("\"", "\\\"") + "\"";
 
-    private static string Sha256(string path)
-    {
-        using var stream = File.OpenRead(path);
-        using var sha = SHA256.Create();
-        return BitConverter.ToString(sha.ComputeHash(stream)).Replace("-", "").ToLowerInvariant();
-    }
+    private static string Sha256(string path) => PclPatchState.Sha256(path);
 }

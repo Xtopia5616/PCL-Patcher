@@ -1,17 +1,30 @@
-﻿namespace PclPatcher;
+namespace PclPatcher;
 
 internal static partial class Program
 {
     private const string BackupSuffix = ".bak";
 
-    private static PclProfile? CheckSource(string source, string hash, string backup, bool force, bool dryRun)
+    /// <summary>
+    /// Decides which profile a source file follows. Resolution order matters:
+    /// an exact sha256 is the strongest signal; a matching <c>.bak</c> means the
+    /// source is already patched; and a build whose seven anchor fingerprints all
+    /// match a profile is accepted as that profile even when its bytes are new
+    /// (snapshot rebuilds). Only a build that matches nothing needs --force.
+    /// </summary>
+    private static BuildResolution ResolveBuild(ModuleDef module, string source, string hash, string backup, bool force, bool dryRun)
     {
         var version = FileVersionInfo.GetVersionInfo(source).FileVersion ?? "<unknown>";
+        var channel = DetectChannel(source, version);
         Console.WriteLine($"version: {version}");
-        Console.WriteLine($"support: {SupportedRange} / profiles: {string.Join(", ", Profiles.Select(p => p.Version))}");
+        if (channel != "unknown") Console.WriteLine($"build  : {version} {ChannelLabel(channel)}");
+        Console.WriteLine($"support: {SupportedRange} / profiles: {string.Join(", ", Profiles.Select(p => p.Label))}");
 
         var profile = Profiles.FirstOrDefault(p => p.Sha256 == hash);
-        if (profile is not null) return profile;
+        if (profile is not null)
+        {
+            Console.WriteLine($"match  : exact sha256 → {profile.Label}");
+            return new BuildResolution(profile, "exact", channel, true);
+        }
 
         if (File.Exists(backup))
         {
@@ -20,28 +33,37 @@ internal static partial class Program
             if (backupProfile is not null)
             {
                 Console.WriteLine($"note   : source sha256 {hash} is not the known original,");
-                Console.WriteLine($"         but backup matches {backupProfile.Version}; treating source as already patched");
-                return backupProfile;
+                Console.WriteLine($"         but backup matches {backupProfile.Label}; treating source as already patched");
+                return new BuildResolution(backupProfile, "patched", channel, false);
             }
             Console.WriteLine($"WARN   : backup exists but its sha256 is unknown ({backupHash})");
+        }
+
+        var structural = MatchByFingerprints(module, channel, out var matched, out var total);
+        if (structural is not null)
+        {
+            Console.WriteLine($"match  : structural {matched}/{total} fingerprints → {structural.Label} (unlisted build)");
+            return new BuildResolution(structural, "structural", channel, true);
         }
 
         if (force)
         {
             Console.WriteLine("WARN   : unknown hash, continuing because --force was passed");
-            return null;
+            return new BuildResolution(null, "forced", channel, false);
         }
 
         if (dryRun)
         {
             Console.WriteLine("WARN   : unknown hash; dry-run is allowed, write requires --force");
-            return null;
+            return new BuildResolution(null, "dry-run", channel, false);
         }
 
         throw new InvalidOperationException(
             $"unverified PCL binary (version={version}, sha256={hash}); " +
-            $"supported builds: {string.Join(", ", Profiles.Select(p => p.Version))} ({SupportedRange}). " +
-            "Pass --force to write anyway, or --dry-run to probe.");
+            $"supported builds: {string.Join(", ", Profiles.Select(p => p.Label))} ({SupportedRange}). " +
+            "Snapshots that keep the anchor methods are matched by fingerprint automatically; " +
+            "for a build whose anchors moved run --adopt and add the printed profile, " +
+            "or pass --force to write anyway.");
     }
 
     /// <summary>

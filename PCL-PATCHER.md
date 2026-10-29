@@ -1,4 +1,4 @@
-# PCL 2.99.0.1 IL patcher：实现、实测与更多方式
+# PCL 2.99.0.x IL patcher：实现、实测与更多方式
 
 作者：**Xtopia**（开发协助：DeepSeek）
 
@@ -7,6 +7,9 @@
 
 目标文件：`D:\Minecraft\Plain Craft Launcher 2.exe`
 版本：`2.99.0.1`，SHA-256 `0db34e19d9eeb6d496d20fabe786ec16bbd36ba6b0ccdc8d29cb7e909c114397`
+也支持 `2.99.0.0`，SHA-256 `6b6e1260cb5a1d6a303855f1c60cab3d0bc1aebba7e40a964180188b271e7386`
+以及快照版 `2.99.0.0`（2026-10-29），SHA-256
+`5b64d6d540c376390470cea3ab99d47661e8bca81be2ba647ea83e7d2e9428fa`
 
 > 本机副本上的研究性 PoC：默认原地替换源文件，替换前自动备份为 `.bak`，可用 `--restore` 还原。
 > 不要分发修改版，也不要把来源不明的“修复版”当成可信文件。
@@ -51,7 +54,7 @@ PCL.ModSecret::RestrictMcDownload  literal=True  const=True
 | `LinkPrecheckCustomPeer` | 在“创建房间/加入房间”入口先检查 `LinkCustomPeer`，为空时直接提示，不再先弹端口/邀请码输入框 |
 | `LinkNoticeText` | `PageLinkMain.InitializeComponent` 加载后把联机页的示例文本按钮改成节点停服/自建说明 |
 | `LinkPeerHint` | `PageSetupLink.InitializeComponent` 加载后改写“自定义节点”输入框的 ToolTip（原文案还在推荐已停服的公共节点） |
-| `DisableSelfUpdate` | 可选 `--no-update`：把 `ModSecret.UpdateStart` 直接 `ret`，防止更新器覆盖补丁 |
+| `DisableSelfUpdate` | 可选 `--no-update`：把 `ModSecret.UpdateStart` 直接 `ret`，防止更新器覆盖补丁（GUI 默认勾选“禁用更新”） |
 
 `RestoreLinkEntry` 起七个联机步骤只有在启用联机范围时才加入 PatchPlan；
 `--download-only` 会跳过它们，不会触碰 `PageLinkMain` / `PageSetupUI`。
@@ -72,6 +75,9 @@ CurseForge 镜像属于下载组，`--download-only` 仍会应用。
 `Profiles` 里保存已知版本的 `Version + SHA256 + 方法指纹`。当前已知：
 
 ```
+version: 2.99.0.0
+sha256 : 6b6e1260cb5a1d6a303855f1c60cab3d0bc1aebba7e40a964180188b271e7386
+
 version: 2.99.0.1
 sha256 : 0db34e19d9eeb6d496d20fabe786ec16bbd36ba6b0ccdc8d29cb7e909c114397
 ```
@@ -102,6 +108,80 @@ PageLaunchLeft.RefreshButtonsUI
 ```
 
 它会打印每个步骤的 `Ready / AlreadyPatched / Missing` 和指纹对比，不会写文件。
+
+### 2.1 2.99.0.0 与 2.99.0.1 的差异
+
+两个版本的 7 个指纹里有 4 个不同，但不是所有差异都意味着“需要多打补丁”：
+
+| 站点 | 2.99.0.0 | 2.99.0.1 | 处理 |
+|---|---|---|---|
+| `PageDownloadLeft..ctor` | 已经是 `PageID = 0`、无隐藏语句 | 4 段隐藏调用 + `PageID = 2` | 0.0 跳过，0.1 删 4 段 |
+| 更新提示“下载”按钮 | 原本就有 | 空字符串占位 | 0.0 跳过，0.1 改字符串 |
+| Mod 禁用页下载按钮 | 原本就有 `UiHiddenPageDownload` 逻辑 | 被写死为 `Collapsed` | 0.0 跳过，0.1 重建 |
+| 启动页空状态 | 原本就有 `UiHiddenPageDownload` 逻辑 | 被写死为 state 1 | 0.0 跳过，0.1 重建 |
+| 资源详情安装按钮 | **被删掉**（无 `Install_Click`） | 被删掉 | 两个版本都要补 |
+| 版本选择“导入整合包” | 原本已插回面板 | 被删掉 | 0.0 跳过，0.1 补插 |
+
+因此 `ExtraUiEntries` 的探测改成了**逐站点判断**（`IsUpdatePromptPatched` 等 5 个
+`Is*Patched`），`Apply` 只补缺失的站点、最后统一 `Verify`，不再要求一次正好改 5 处：
+
+```text
+2.99.0.0  patch : ExtraUiEntries  1     # 只补资源详情安装按钮
+2.99.0.1  patch : ExtraUiEntries  5
+```
+
+旧实现用“更新提示是否有下载按钮”一个信号代表全部 5 个站点，会在 2.99.0.0 上误判为
+`AlreadyPatched` 并把整组跳过，结果是资源详情页仍然没有“安装”按钮。
+
+### 2.2 快照版与“后续版本”的自动适配
+
+PCL 的快照版（快照版渠道）和正式版**共用数字版本号**：快照版日志写
+`程序版本：快照版 2.99.0.0`，但 `FileVersion` 还是 `2.99.0.0`。因此指纹表里
+`2.99.0.0` 有两条 profile：正式版与 2026-10-29 快照版，靠 `Channel` 区分。
+
+构建身份按三段解析（`BuildIdentity.cs`）：
+
+| 顺序 | 判据 | 结果 | 是否需要 `--force` |
+|---|---|---|---|
+| 1 | SHA-256 命中 profile | `exact`，用该 profile 的指纹复核 | 否 |
+| 2 | 7 个锚点方法指纹全部命中某个 profile | `structural`，按该版本方案补丁 | 否 |
+| 3 | 都不命中 | `unknown` | 是（GUI：允许未知版本） |
+
+快照重建通常只改时间戳/资源/非锚点代码，锚点指纹不变，于是第 2 段直接放行——
+这就是“后续所有快照版不用改代码也能打”的机制。第 2 段仍然要过全部 `Probe`、
+写盘前后两轮 `Verify` 和全模块 IL 校验，所以不会因为跳过哈希而少做安全检查。
+
+渠道识别不联网、不读配置：启动器自己把 `快照版 2.99.0.0` / `正式版 2.99.0.0`
+写在程序集的 `#US` 堆里（`PCL 版本：快照版 2.99.0.0`、`PCL 已更新至快照版 …`），
+`DetectChannel` 直接扫描 PE 里的 UTF-16 字符串。同一数字版本号下，`release` 与
+`snapshot` 用同渠道的 profile 优先匹配。
+
+如果某个新版本的锚点真的移动了（第 2 段也匹配不上），用一条命令把它收录：
+
+```powershell
+# 打印渠道、SHA-256、7 个指纹、全部 Probe 结论和可粘贴的 C# 条目
+.\dist\PclPatcher.exe "新的 PCL.exe" --adopt
+
+# 直接写入 %LOCALAPPDATA%\PclPatcher\profiles.tsv（不用重新编译，GUI 也立即跟随）
+.\dist\PclPatcher.exe "新的 PCL.exe" --adopt --save
+
+# 便携用法：把 profiles.tsv 放到指定路径
+$env:PCLPATCHER_PROFILES = '.\PclPatcher.profiles.tsv'
+.\dist\PclPatcher.exe "新的 PCL.exe" --adopt --save
+```
+
+外部 profile 文件是一行一个构建的 TSV：
+
+```text
+build <TAB> 版本 <TAB> sha256 <TAB> 渠道 <TAB> 构建日期 <TAB> 方法=指纹;方法=指纹;…
+```
+
+`--profiles` 会同时列出内置与外部条目；重复的 SHA-256 以先出现的为准。
+
+GUI 对未收录的构建会先跑一次 `PclPatcher --identify`：返回 `match=structural`
+时版本行显示“2.99.0.0 快照版（结构匹配）”，可以直接开始补丁，不需要勾选
+“允许未知版本”。只有 `match=unknown` 才会弹“版本不匹配”。
+
 
 ## 3. 补丁流程
 
@@ -476,10 +556,24 @@ PCL 的 `ModAnimation` 动画线程和 PCL 主窗体生命周期绑定，直接�
 发布包**不包含 PCL 本体**；首次启动会自动找 `D:\Minecraft\Plain Craft Launcher 2.exe`，
 找不到时弹文件选择框。
 
-界面里的版本下拉框显示的是**最老的支持版本**（如 `2.99.0.1`），悬停提示写明
-“2.99.0.1 及更高版本”，不会硬编码单个版本号。
+界面里的“版本”是**只读的自动识别结果**（一个不可点击的灰底字段，不是下拉框）：
+按所选 PCL 的 SHA-256 在 `Profiles` 里查，补丁版则退回用同名 `.bak` 的 SHA-256 查；
+查不到时显示“未识别版本”，没选文件时留空。它不提供手动选择，避免界面显示的版本
+和实际被打补丁的文件不一致——这也正是旧版“明明显示 0.0、启动出来却是 0.1”的来源：
+旧版那行显示的是**支持范围的下限**（`2.99.0.0`），跟当前文件无关。
+字段的悬停提示会列出全部已收录版本和 `2.99.0.0+` 范围。
+
 范围由 patcher 的 `Profiles` 表决定：GUI 启动后运行 `PclPatcher --profiles` 读取，
 新增版本只需在 `src\PclPatcher\Profiles.cs` 的 `Profiles` 里加一条 profile，GUI 会自动跟随。
+界面上统一显示为 `2.99.0.0+`。
+
+选择逻辑有独立回归用例（`patcher-lab/.test/catalogtest`，纯 net48 控制台）：
+0.0 原版 → `2.99.0.0`，0.1 原版 → `2.99.0.1`，0.1 已打补丁 → 靠 `.bak` 仍显示 `2.99.0.1`，
+未知哈希 → `未识别版本`。
+
+“查找 PCL”列表里的补丁状态同样按内容判断，不看 `.bak` 是否存在：还原会保留 `.bak`，
+所以只有源文件 SHA-256 与同名 `.bak` 不同时才标“已打过补丁”，两者相同则标
+“有原版备份”（`Common\PclPatchState.cs`，回归用例同上）。
 
 关于页按重度使用规则在显著位置署名“龙腾猫跃”并放赞助链接，启动补丁版前提示购买 Minecraft 正版；
 详见 [NOTICE.md](NOTICE.md)。
@@ -568,16 +662,16 @@ Patcher 只改 code-behind 里对 UI 属性的赋值：
 
 1. **能力探测**：每个步骤先跑 `Probe`（不修改模块），返回 `Ready / AlreadyPatched / Missing`；optional 步骤缺失自动跳过，required 缺失默认中止。
 2. **语义锚点**：`PageSelectLeft` 的 local 不再写死 `Ldloc_1`，而是从 `stloc` 指令取实际 Local；`ModpackInstall` 会校验 `ldstr + newobj + throw` 三连，并从 `finally` handler 的 `HandlerStart` 找外层 finally，而不是硬算偏移。
-3. **版本适配表**：`Profiles` 保存 `2.99.0.1` 的 SHA-256 和 7 个方法指纹；未知版本允许 `--dry-run` 探测，写盘需要 `--force`。
-4. **失败关闭**：ctor 必须 4/4、ExtraUi 必须 5/5、Modpack 必须找到限制 throw；数量不对立即中止，不写半坏文件。
+3. **版本适配表**：`Profiles` 保存 `2.99.0.0` / `2.99.0.1` 的 SHA-256 和各自的 7 个方法指纹；未知版本允许 `--dry-run` 探测，写盘需要 `--force`。
+4. **失败关闭**：ctor 必须 4/4、ExtraUi 的 5 个站点必须逐个 Verify 通过、Modpack 必须找到限制 throw；数量不对立即中止，不写半坏文件。
 5. **幂等**：对已打补丁的 exe 再跑，`Probe` 会返回 `AlreadyPatched`，不会重复应用。
 
-仍然依赖 2.99.0.1 的部分：
+仍然依赖 2.99.0.0 / 2.99.0.1 的部分：
 
-- `PageDownloadLeft..ctor` 的 4 段隐藏调用模式；
+- `PageDownloadLeft..ctor` 的 4 段隐藏调用模式（只在 2.99.0.1 上需要删；0.0 已是补丁形状）；
 - `LoaderInit` 的 callback/字段/`PageLoaderInit` 形状；
 - `ModpackInstall` 的 `IL_02DA` 汇合点、7 个 `InstallPack*` 方法、无参入口；
-- `PageDownloadResourceDetail` 的双委托 `ToListItem` 循环；
+- `PageDownloadResourceDetail` 的双委托 `ToListItem` 循环（两个版本都要补）；
 - `PageSelectLeft` 的 `"导入整合包"` 字符串和对象初始化结构。
 
 还可以继续做：
@@ -596,7 +690,7 @@ Patcher 只改 code-behind 里对 UI 属性的赋值：
   把 patcher 加入安全软件信任、用 `--output` 写到可写目录。
 - `.bak` 只保留最近一次确认的原版：已有备份不会在重复补丁时被覆盖；源文件是已验证原版而
   备份明显过期时才会刷新备份。
-- 补丁强依赖 2.99.0.1 的 IL 形状；PCL 升级后 `--force` 可能写出不可运行的文件，必须先重新分析。
+- 补丁强依赖 2.99.0.0 / 2.99.0.1 的 IL 形状；PCL 升级后 `--force` 可能写出不可运行的文件，必须先重新分析。
 - `--no-update` 会关闭 PCL 的更新路径，包括手动检查更新；不需要时不要加。
 - 不分发修改版；PCL 作者是按合规要求关闭功能的，第三方“修复版”也有安全风险。
 - 许可与免责：本项目原创代码以 [MIT](LICENSE) 发布（PCL 派生文件除外），完整风险提示见

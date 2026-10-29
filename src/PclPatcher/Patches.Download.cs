@@ -1,4 +1,4 @@
-﻿namespace PclPatcher;
+namespace PclPatcher;
 
 internal static partial class Program
 {
@@ -93,14 +93,21 @@ internal static partial class Program
     // ---------------------------------------------------------------------
     private static int PatchExtraUiEntries(ModuleDef module)
     {
+        // The five sites are independent: 2.99.0.0 still has four of them in the
+        // pre-restriction shape and only lost the resource-detail install button,
+        // while 2.99.0.1 lost all five. Patch whatever is missing, then verify
+        // the whole set.
         var changes = 0;
-        changes += PatchUpdatePrompt(module);
-        changes += PatchModDisabledButton(module);
-        changes += PatchLaunchEmptyState(module);
-        changes += PatchResourceDetailInstall(module);
-        changes += PatchSelectLeftImport(module);
-        if (changes != 5)
-            throw new InvalidOperationException($"extra UI entry shape changed: patched {changes}/5 site(s)");
+        if (!IsUpdatePromptPatched(module)) changes += PatchUpdatePrompt(module);
+        if (!IsModDisabledPatched(module)) changes += PatchModDisabledButton(module);
+        if (!IsLaunchEmptyStatePatched(module)) changes += PatchLaunchEmptyState(module);
+        if (!IsResourceDetailPatched(module)) changes += PatchResourceDetailInstall(module);
+        if (!IsSelectLeftImportPatched(module)) changes += PatchSelectLeftImport(module);
+
+        if (changes == 0)
+            throw new InvalidOperationException("extra UI entry probe reported work but no site was patched");
+
+        VerifyExtraUiEntries(module);
         return changes;
     }
 
@@ -283,13 +290,19 @@ internal static partial class Program
                 if (ins[i].OpCode != OpCodes.Ldstr || ins[i].Operand is not string s || s != "Minecraft 更新提示")
                     continue;
 
+                // Only touch the label right after the "确定" button: the dialog
+                // also carries an unrelated empty caption later on.
                 for (var j = i + 1; j < Math.Min(i + 12, ins.Count); j++)
                 {
-                    if (ins[j].OpCode == OpCodes.Ldstr && ins[j].Operand is string text && text.Length == 0)
+                    if (ins[j].OpCode != OpCodes.Ldstr || ins[j].Operand is not string ok || ok != "确定") continue;
+                    for (var k = j + 1; k < Math.Min(j + 4, ins.Count); k++)
                     {
-                        ins[j] = OpCodes.Ldstr.ToInstruction("下载");
+                        if (ins[k].OpCode != OpCodes.Ldstr || ins[k].Operand is not string label) continue;
+                        if (label.Length != 0) return 0;
+                        ins[k] = OpCodes.Ldstr.ToInstruction("下载");
                         return 1;
                     }
+                    return 0;
                 }
             }
         }

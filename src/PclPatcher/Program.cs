@@ -6,13 +6,30 @@ internal static partial class Program
     {
         try
         {
-            // Machine readable profile list for the GUIs; must stay free of the
-            // banner and of any PCL build so it can run without a source file.
+            // The GUI (and any other host that redirects stdout) has no console, so
+            // without this .NET would encode Chinese profile labels with the OEM
+            // code page (936) while the reader decodes UTF-8: mojibake in the UI and
+            // in the log panel.
+            if (Console.IsOutputRedirected)
+            {
+                try { Console.OutputEncoding = new UTF8Encoding(false); }
+                catch (IOException) { }
+            }
+
+            // Machine readable entries for the GUIs; they must stay free of the
+            // banner and of any PCL build so they can run without a source file
+            // or while another tool parses stdout.
             if (args.Contains("--profiles"))
             {
                 PrintProfiles();
                 return 0;
             }
+
+            var source = ResolveSource(args);
+            if (args.Contains("--identify")) return Identify(source);
+            if (args.Contains("--adopt"))
+                return Adopt(source, includeLink: !args.Contains("--download-only"), save: args.Contains("--save"));
+
             return Run(args);
         }
         catch (Exception ex)
@@ -27,7 +44,7 @@ internal static partial class Program
 
     private static int Run(string[] args)
     {
-        Console.WriteLine("PclPatcher 1.0 · 第三方 IL 补丁工具");
+        Console.WriteLine("PclPatcher 1.1 · 第三方 IL 补丁工具");
         Console.WriteLine("Some birds aren't meant to be caged. Their feathers are just too bright.");
         Console.WriteLine("And when they fly away, the part of you that knows it was a sin to lock them up does rejoice.");
         Console.WriteLine();
@@ -59,11 +76,13 @@ internal static partial class Program
 
         if (!File.Exists(source)) throw new FileNotFoundException("source not found", source);
         var sourceHash = Sha256(source);
-        var profile = CheckSource(source, sourceHash, backup, force, dryRun);
-        var sourceIsKnownOriginal = profile is not null &&
-                                    string.Equals(profile.Sha256, sourceHash, StringComparison.OrdinalIgnoreCase);
-
         var plan = BuildPlan(noUpdate, includeLink: !downloadOnly);
+
+        using var module = ModuleDefMD.Load(source);
+        var resolution = ResolveBuild(module, source, sourceHash, backup, force, dryRun);
+        var profile = resolution.Profile;
+        var sourceIsKnownOriginal = resolution.IsKnownOriginal;
+
         Console.WriteLine($"source : {source}");
         Console.WriteLine($"mode   : {(inPlace ? "in-place, source will be replaced" : "separate output file")}");
         Console.WriteLine($"scope  : {(downloadOnly ? "download only" : "download + link")}");
@@ -72,112 +91,109 @@ internal static partial class Program
         Console.WriteLine($"sha256 : {sourceHash}");
         Console.WriteLine();
 
-        using (var module = ModuleDefMD.Load(source))
+        if (profile is not null && sourceIsKnownOriginal)
+            CheckFingerprints(module, profile, force || dryRun);
+        else if (profile is not null)
+            Console.WriteLine("fp     : skipped (source is already patched; backup matches a known build)");
+
+        var pending = new List<PatchStep>();
+        foreach (var step in plan)
         {
-            if (profile is not null && sourceIsKnownOriginal)
-                CheckFingerprints(module, profile, force || dryRun);
-            else if (profile is not null)
-                Console.WriteLine("fp     : skipped (source is already patched; backup matches a known build)");
-
-            var pending = new List<PatchStep>();
-            foreach (var step in plan)
+            var probe = step.Probe(module);
+            if (probe.State == PatchState.AlreadyPatched)
             {
-                var probe = step.Probe(module);
-                if (probe.State == PatchState.AlreadyPatched)
-                {
-                    Console.WriteLine($"probe  : {step.Name,-28} already patched ({probe.Reason})");
-                    continue;
-                }
-
-                if (probe.State == PatchState.Missing)
-                {
-                    if (step.Required && !allowPartial)
-                        throw new InvalidOperationException(
-                            $"{step.Name}: {probe.Reason}. Pass --allow-partial to skip this step.");
-                    Console.WriteLine($"probe  : {step.Name,-28} SKIP ({probe.Reason})");
-                    continue;
-                }
-
-                pending.Add(step);
+                Console.WriteLine($"probe  : {step.Name,-28} already patched ({probe.Reason})");
+                continue;
             }
 
-            // Stop the launcher and verify the destination before mutating the
-            // module, so a locked/protected folder fails before any work is shown.
-            if (!dryRun)
+            if (probe.State == PatchState.Missing)
             {
-                if (inPlace && pending.Count > 0)
-                {
-                    EnsureDirectoryWritable(Path.GetDirectoryName(output)!);
-                    StopRunningPcl(source, stopPcl);
-                }
-                else if (!inPlace)
-                {
-                    EnsureDirectoryWritable(Path.GetDirectoryName(output)!);
-                }
+                if (step.Required && !allowPartial)
+                    throw new InvalidOperationException(
+                        $"{step.Name}: {probe.Reason}. Pass --allow-partial to skip this step.");
+                Console.WriteLine($"probe  : {step.Name,-28} SKIP ({probe.Reason})");
+                continue;
             }
 
-            var applied = new List<PatchStep>();
-            foreach (var step in pending)
+            pending.Add(step);
+        }
+
+        // Stop the launcher and verify the destination before mutating the
+        // module, so a locked/protected folder fails before any work is shown.
+        if (!dryRun)
+        {
+            if (inPlace && pending.Count > 0)
             {
-                var changes = step.Apply(module);
-                step.Verify(module);
-                applied.Add(step);
-                Console.WriteLine($"patch  : {step.Name,-28} {changes}");
+                EnsureDirectoryWritable(Path.GetDirectoryName(output)!);
+                StopRunningPcl(source, stopPcl);
+            }
+            else if (!inPlace)
+            {
+                EnsureDirectoryWritable(Path.GetDirectoryName(output)!);
+            }
+        }
+
+        var applied = new List<PatchStep>();
+        foreach (var step in pending)
+        {
+            var changes = step.Apply(module);
+            step.Verify(module);
+            applied.Add(step);
+            Console.WriteLine($"patch  : {step.Name,-28} {changes}");
+        }
+
+        try
+        {
+            ValidateIl(module);
+        }
+        catch (InvalidOperationException ex) when (applied.Count == 0)
+        {
+            // Nothing was applied: the source is an older patch product.
+            // Point at restore instead of leaking a raw IL message.
+            throw new InvalidOperationException(
+                ex.Message + Environment.NewLine +
+                "  源文件是旧版补丁产物，先还原再重打：--restore（GUI：还原备份 → 开始补丁）", ex);
+        }
+        Console.WriteLine("verify : IL structure OK");
+
+        if (dryRun)
+        {
+            Console.WriteLine("dry-run: no file written");
+            return 0;
+        }
+
+        if (inPlace && applied.Count == 0)
+        {
+            Console.WriteLine();
+            Console.WriteLine("already: source is already patched; nothing written");
+            return 0;
+        }
+
+        var temp = output + ".tmp";
+        try
+        {
+            TryDelete(temp);
+            module.Write(temp, new ModuleWriterOptions(module));
+
+            using (var check = ModuleDefMD.Load(temp))
+            {
+                foreach (var step in applied) step.Verify(check);
+                ValidateIl(check);
             }
 
-            try
+            if (inPlace)
             {
-                ValidateIl(module);
+                PrepareBackup(source, backup, sourceHash, sourceIsKnownOriginal);
+                ReplaceFile(temp, output);
             }
-            catch (InvalidOperationException ex) when (applied.Count == 0)
+            else
             {
-                // Nothing was applied: the source is an older patch product.
-                // Point at restore instead of leaking a raw IL message.
-                throw new InvalidOperationException(
-                    ex.Message + Environment.NewLine +
-                    "  源文件是旧版补丁产物，先还原再重打：--restore（GUI：还原备份 → 开始补丁）", ex);
+                File.Move(temp, output, true);
             }
-            Console.WriteLine("verify : IL structure OK");
-
-            if (dryRun)
-            {
-                Console.WriteLine("dry-run: no file written");
-                return 0;
-            }
-
-            if (inPlace && applied.Count == 0)
-            {
-                Console.WriteLine();
-                Console.WriteLine("already: source is already patched; nothing written");
-                return 0;
-            }
-
-            var temp = output + ".tmp";
-            try
-            {
-                TryDelete(temp);
-                module.Write(temp, new ModuleWriterOptions(module));
-
-                using (var check = ModuleDefMD.Load(temp))
-                {
-                    foreach (var step in applied) step.Verify(check);
-                    ValidateIl(check);
-                }
-
-                if (inPlace)
-                {
-                    PrepareBackup(source, backup, sourceHash, sourceIsKnownOriginal);
-                    ReplaceFile(temp, output);
-                }
-                else
-                {
-                    File.Move(temp, output, true);
-                }
-            }
-            finally
-            {
-                TryDelete(temp);
-            }
+        }
+        finally
+        {
+            TryDelete(temp);
         }
 
         Console.WriteLine();
@@ -190,17 +206,15 @@ internal static partial class Program
 
     /// <summary>
     /// Tab separated profile list consumed by the GUIs. Header/tag lines keep the
-    /// format self-describing, and extra lines can be added without breaking the
-    /// parser in PclVersionCatalog.
+    /// format self-describing, and extra fields/lines can be added without
+    /// breaking the parser in PclVersionCatalog.
     /// </summary>
     private static void PrintProfiles()
     {
-        Console.WriteLine("profiles\t1");
+        Console.WriteLine("profiles\t2");
         foreach (var profile in Profiles)
-        {
             Console.WriteLine(
-                $"profile\t{profile.Version}\t{profile.Sha256}\t{profile.Fingerprints.Count}");
-        }
+                $"profile\t{profile.Version}\t{profile.Sha256}\t{profile.Fingerprints.Count}\t{profile.Channel}\t{profile.Label}");
         Console.WriteLine($"support\t{SupportedRange}");
     }
 
@@ -209,7 +223,8 @@ internal static partial class Program
         var source = args.FirstOrDefault(a => !a.StartsWith("--", StringComparison.Ordinal));
         if (source is null)
             throw new InvalidOperationException(
-                "usage: PclPatcher <PCL.exe> [output.exe] [--restore] [--dry-run] [--force] [--allow-partial] [--download-only] [--no-update] [--no-stop] [--fingerprints] [--profiles]");
+                "usage: PclPatcher <PCL.exe> [output.exe] [--restore] [--dry-run] [--force] [--allow-partial] " +
+                "[--download-only] [--no-update] [--no-stop] [--fingerprints] [--identify] [--adopt] [--profiles]");
         return Path.GetFullPath(source);
     }
 

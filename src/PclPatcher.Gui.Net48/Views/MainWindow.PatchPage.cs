@@ -60,18 +60,14 @@ public partial class MainWindow : Window
 
         var versionRow = new Grid { Margin = new Thickness(0, 0, 0, 8) };
         versionRow.Children.Add(PclUi.Label("版本", 12.5, PclUi.Ink, FontWeights.SemiBold));
-        _versionBox = new PCL.MyComboBox
-        {
-            Width = 200,
-            Height = 30,
-            FontSize = 14,
-            HorizontalAlignment = HorizontalAlignment.Right
-        };
-        // Filled from the patcher's profile list once the window loads; keeping a
-        // neutral placeholder here means the UI never names a specific PCL build.
-        _versionBox.Items.Add("正在检测版本…");
-        _versionBox.SelectedIndex = 0;
-        versionRow.Children.Add(_versionBox);
+        // A plain read-only line, not a control: the build is detected from the
+        // source file's SHA-256 and must always match the file being patched.
+        _versionText = PclUi.Label("正在检测版本…", 13.5, PclUi.Ink, FontWeights.SemiBold);
+        _versionText.HorizontalAlignment = HorizontalAlignment.Right;
+        _versionText.VerticalAlignment = VerticalAlignment.Center;
+        _versionText.TextTrimming = TextTrimming.CharacterEllipsis;
+        _versionText.Margin = new Thickness(12, 0, 2, 0);
+        versionRow.Children.Add(_versionText);
         sourceBody.Children.Add(versionRow);
 
         var sourceRow = new Grid();
@@ -172,12 +168,15 @@ public partial class MainWindow : Window
         _leftStack.Children.Add(optionCard);
 
         _dryRunBox = AddOption(optionBody, "只探测", "校验并打印结果，不写出文件", true);
-        _noUpdateBox = AddOption(optionBody, "禁用更新", "关闭 PCL 自更新，避免覆盖补丁", true);
+        _noUpdateBox = AddOption(optionBody, "禁用更新", "关闭 PCL 自更新，避免更新覆盖补丁（默认开启）", true);
+        // A patched build must not be replaced by the official updater on first
+        // launch; that is exactly how a patched 2.99.0.0 turns back into 2.99.0.1.
+        _noUpdateBox.Checked = true;
         _linkUnlockBox = AddOption(optionBody, "同时解锁联机", "勾选：下载 + 联机；不勾选：仅解锁下载", true);
         _linkUnlockBox.Checked = true;
         _stopPclBox = AddOption(optionBody, "自动退出 PCL", "补丁/还原前结束正在运行的 PCL", true);
         _stopPclBox.Checked = true;
-        _forceBox = AddOption(optionBody, "允许未知版本", "跳过 SHA-256 与方法指纹校验", false);
+        _forceBox = AddOption(optionBody, "允许未知版本", "哈希与结构指纹都不匹配时才需要：跳过校验强制写入", false);
         var forceHint = (TextBlock)((Grid)_forceBox.Parent).Children[1];
         _noUpdateBox.Change += (_, isChecked) => _steps?.SetNoUpdate(isChecked);
         _linkUnlockBox.Change += (_, isChecked) => _steps?.SetLink(isChecked);

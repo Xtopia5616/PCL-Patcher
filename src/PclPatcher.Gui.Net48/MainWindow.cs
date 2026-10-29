@@ -51,7 +51,7 @@ public partial class MainWindow : Window
 
     private PCL.MyTextBox _sourceBox;
     private PCL.MyTextBox _outputBox;
-    private PCL.MyComboBox _versionBox;
+    private TextBlock _versionText;
     private PCL.MyCheckBox _dryRunBox;
     private PCL.MyCheckBox _noUpdateBox;
     private PCL.MyCheckBox _linkUnlockBox;
@@ -135,6 +135,7 @@ public partial class MainWindow : Window
     private string _lastVersion;
     private double _lastSize;
     private bool _lastKnown;
+    private string _structuralLabel;
     private int _infoGeneration;
 
     public MainWindow(string pclPath)

@@ -1,4 +1,4 @@
-﻿namespace PclPatcher;
+namespace PclPatcher;
 
 internal static partial class Program
 {
@@ -50,18 +50,89 @@ internal static partial class Program
 
     private static ProbeResult ProbeExtraUiEntries(ModuleDef module)
     {
-        var promptEmpty = module.GetTypes().SelectMany(t => t.Methods).Where(m => m.HasBody)
-            .Any(m => m.Body.Instructions.Any(i => i.Operand is string s && s == "Minecraft 更新提示") &&
-                      m.Body.Instructions.Any(i => i.Operand is string s2 && s2.Length == 0));
-        var promptDownload = module.GetTypes().SelectMany(t => t.Methods).Where(m => m.HasBody)
-            .Any(m => m.Body.Instructions.Any(i => i.Operand is string s && s == "Minecraft 更新提示") &&
-                      m.Body.Instructions.Any(i => i.Operand is string s2 && s2 == "下载"));
-        var selectLeft = FindMethod(FindType(module, "PCL.PageSelectLeft"), "McFolderListUI")
-            .Body.Instructions.Any(i => i.Operand is string s && s == "导入整合包");
+        var pending = new List<string>();
+        if (!IsUpdatePromptPatched(module)) pending.Add("update prompt");
+        if (!IsModDisabledPatched(module)) pending.Add("mod-disabled button");
+        if (!IsLaunchEmptyStatePatched(module)) pending.Add("launch empty state");
+        if (!IsResourceDetailPatched(module)) pending.Add("resource detail install");
+        if (!IsSelectLeftImportPatched(module)) pending.Add("import modpack item");
 
-        if (promptDownload) return new(PatchState.AlreadyPatched, "update prompt already patched");
-        if (promptEmpty && selectLeft) return new(PatchState.Ready, "pre-patch UI anchors");
-        return new(PatchState.Missing, "UI entry anchors missing");
+        if (pending.Count == 0) return new(PatchState.AlreadyPatched, "all 5 UI sites already present");
+        return new(PatchState.Ready, $"{pending.Count}/5 site(s) need patching: {string.Join(", ", pending)}");
+    }
+
+    // 2.99.0.0 still ships the pre-restriction shape for four of the five sites
+    // (only the resource-detail install button was cut), so the probe has to be
+    // per-site instead of keying off the update prompt alone.
+    private static bool IsUpdatePromptPatched(ModuleDef module)
+    {
+        foreach (var type in module.GetTypes())
+        foreach (var method in type.Methods.Where(m => m.HasBody))
+        {
+            var ins = method.Body.Instructions;
+            for (var i = 0; i < ins.Count; i++)
+            {
+                if (ins[i].OpCode != OpCodes.Ldstr || ins[i].Operand is not string s || s != "Minecraft 更新提示")
+                    continue;
+
+                // anchor on the "确定" button, then read the label that follows it
+                for (var j = i + 1; j < Math.Min(i + 12, ins.Count); j++)
+                {
+                    if (ins[j].OpCode != OpCodes.Ldstr || ins[j].Operand is not string ok || ok != "确定") continue;
+                    var next = ins.Skip(j + 1).Take(3).FirstOrDefault(x => x.OpCode == OpCodes.Ldstr);
+                    return next?.Operand is string label && label == "下载";
+                }
+                return false;
+            }
+        }
+        return false;
+    }
+
+    private static bool IsModDisabledPatched(ModuleDef module)
+    {
+        var ins = FindMethod(FindType(module, "PCL.PageInstanceModDisabled"), "BtnDownload_Loaded").Body?.Instructions;
+        return ins is { Count: > 0 } &&
+               ins[0].OpCode == OpCodes.Ldstr &&
+               ins[0].Operand is string s && s == "UiHiddenPageDownload";
+    }
+
+    private static bool IsLaunchEmptyStatePatched(ModuleDef module)
+    {
+        var ins = FindMethod(FindType(module, "PCL.PageLaunchLeft"), "RefreshButtonsUI").Body?.Instructions;
+        return ins?.Any(i => i.Operand is string s && s == "UiHiddenPageDownload") == true;
+    }
+
+    private static bool IsResourceDetailPatched(ModuleDef module)
+    {
+        var ins = FindMethod(FindType(module, "PCL.PageDownloadResourceDetail"), "InitializeStackResourceVersions").Body?.Instructions;
+        return ins?.Any(i => i.Operand is IMethod m && m.Name == "Install_Click") == true;
+    }
+
+    private static bool IsSelectLeftImportPatched(ModuleDef module)
+    {
+        var ins = FindMethod(FindType(module, "PCL.PageSelectLeft"), "McFolderListUI").Body?.Instructions;
+        if (ins is null) return false;
+
+        var titleIndex = -1;
+        for (var i = 0; i < ins.Count; i++)
+        {
+            if (ins[i].OpCode == OpCodes.Ldstr && ins[i].Operand is string s && s == "导入整合包")
+            {
+                titleIndex = i;
+                break;
+            }
+        }
+        if (titleIndex < 0) return false;
+
+        for (var i = titleIndex; i < Math.Min(titleIndex + 30, ins.Count); i++)
+        {
+            if (ins[i].OpCode.Code is not (Code.Stloc_1 or Code.Stloc_S)) continue;
+            var window = ins.Skip(i + 1).Take(12).ToList();
+            return window.Any(x => x.OpCode == OpCodes.Ldsfld && x.Operand is IField f && f.Name == "FrmSelectLeft") &&
+                   window.Any(x => x.Operand is IMethod m && m.Name == "get_PanList") &&
+                   window.Any(x => x.Operand is IMethod m && m.Name == "Add");
+        }
+        return false;
     }
 
     private static ProbeResult ProbeModpackInstall(ModuleDef module)

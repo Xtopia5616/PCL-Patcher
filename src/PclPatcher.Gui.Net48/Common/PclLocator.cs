@@ -12,6 +12,23 @@ internal sealed class PclCandidate
     public bool HasBackup;
     public bool HasConfig;
     public bool IsRunning;
+
+    private bool? _isPatched;
+
+    /// <summary>
+    /// True only while the exe still differs from its <c>.bak</c>. Restore keeps
+    /// the backup on purpose, so <see cref="HasBackup"/> alone would keep calling a
+    /// restored file patched. Hashed lazily and cached: the finder asks once per
+    /// row, the scan itself never pays for it.
+    /// </summary>
+    public bool IsPatched
+    {
+        get
+        {
+            if (_isPatched is null) _isPatched = PclPatchState.IsPatched(Path);
+            return _isPatched.Value;
+        }
+    }
 }
 
 /// <summary>Progress ping from the locator: either a phase message or a new hit.</summary>
@@ -252,6 +269,8 @@ internal static class PclLocator
 
         if (VersionAtLeast(candidate.Version, minimumVersion)) score += 20;
         if ((DateTime.Now - candidate.Modified).TotalDays <= 120) score += 10;
+        // A backup means this copy has been used with the patcher before (whether
+        // or not it is currently patched), which makes it the interesting one.
         if (candidate.HasBackup) score += 8;
         if (IsCloudOrNetwork(candidate.Path)) score -= 12;
 

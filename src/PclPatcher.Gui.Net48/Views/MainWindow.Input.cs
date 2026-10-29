@@ -109,6 +109,12 @@ public partial class MainWindow : Window
             // Keep the user's text; the validation below will mark it invalid.
         }
 
+        // Remember what the source box pointed at before switching, so an output
+        // path that was still tracking the old file follows the new one too.
+        // Otherwise picking 2.99.0.0 in the finder would keep patching/launching
+        // the 2.99.0.1 file that merely happened to be there first.
+        var previousSource = _sourceBox.Text?.Trim().Trim('"');
+
         // Selecting a different file invalidates the "patched this session"
         // marker; detection below re-enables launch if that file is patched.
         if (!SamePath(path, _lastHashPath)) _patchedOutputPath = null;
@@ -120,7 +126,11 @@ public partial class MainWindow : Window
         ShowPathTail(_sourceBox);
 
         var output = path;
-        if (string.IsNullOrWhiteSpace(_outputBox.Text) || _outputBox.Text == _lastAutoOutput)
+        var outputWasTrackingSource = !string.IsNullOrWhiteSpace(previousSource) &&
+                                      SamePath(_outputBox.Text, previousSource);
+        if (string.IsNullOrWhiteSpace(_outputBox.Text) ||
+            _outputBox.Text == _lastAutoOutput ||
+            outputWasTrackingSource)
         {
             _outputBox.Text = output;
             _outputBox.ToolTip = output;
@@ -313,6 +323,7 @@ public partial class MainWindow : Window
             SetBackupHint(false);
             RefreshBackupState();
             RefreshLaunchReadiness();
+            SyncVersionSelection();
             SetSourceStrip("未选择 PCL 主程序", "待选择", PclUi.Muted,
                 Color.FromRgb(0xF3, 0xF6, 0xFA), Color.FromRgb(0xEC, 0xEF, 0xF4), PclUi.Muted);
             return;
@@ -327,6 +338,7 @@ public partial class MainWindow : Window
             SetBackupHint(false);
             RefreshBackupState();
             RefreshLaunchReadiness();
+            SyncVersionSelection();
             SetSourceStrip("文件不存在，请重新选择", "文件不存在", PclUi.Red,
                 Color.FromRgb(0xFD, 0xEC, 0xEC), Color.FromRgb(0xFA, 0xD7, 0xD7), PclUi.Red);
             return;
@@ -348,6 +360,7 @@ public partial class MainWindow : Window
     private async Task UpdateSourceInfoAsync(string path)
     {
         var generation = ++_infoGeneration;
+        _structuralLabel = null;
         SetSourceStrip("正在校验文件…", "校验中", PclUi.Accent,
             Color.FromRgb(0xEA, 0xF2, 0xFE), Color.FromRgb(0xE8, 0xF1, 0xFF), PclUi.Accent);
 
@@ -400,6 +413,19 @@ public partial class MainWindow : Window
                                 !string.Equals(hash, backupHash, StringComparison.OrdinalIgnoreCase);
             _lastBackupKnown = _catalog.Matches(backupHash);
 
+            // Unlisted hash: ask the patcher whether the anchor methods still
+            // match a known build. Snapshot (快照版) rebuilds change the bytes but
+            // keep the code shape, so this is what lets them patch without the
+            // "允许未知版本" escape hatch.
+            _structuralLabel = null;
+            if (_catalog.IsLoaded && !_lastKnown && !_lastBackupKnown)
+            {
+                _structuralLabel = await IdentifyStructuralAsync(path).ConfigureAwait(true);
+                if (generation != _infoGeneration) return;
+            }
+
+            SyncVersionSelection();
+
             var shortHash = hash.Length >= 16 ? hash.Substring(0, 16) : hash;
             _sourceMeta.Text = WithDetectNote($"{version} · {size:F1} MB · SHA-256 {shortHash}…");
             _sourceMeta.ToolTip = path + Environment.NewLine + "SHA-256: " + hash;
@@ -417,6 +443,8 @@ public partial class MainWindow : Window
             if (generation != _infoGeneration) return;
             _lastHash = null;
             _lastKnown = false;
+            _structuralLabel = null;
+            SyncVersionSelection();
             ResetBackupState();
             RefreshLaunchReadiness();
             SetSourceStrip("读取失败：" + ex.Message, "读取失败", PclUi.Red,
@@ -455,6 +483,15 @@ public partial class MainWindow : Window
                 meta + " · 已打补丁",
                 "已打补丁", PclUi.Accent,
                 Color.FromRgb(0xEA, 0xF2, 0xFE), Color.FromRgb(0xE8, 0xF1, 0xFF), PclUi.Accent);
+            return;
+        }
+
+        if (!string.IsNullOrEmpty(_structuralLabel))
+        {
+            SetSourceStrip(
+                meta + " · 未收录构建，结构匹配 " + _structuralLabel,
+                "结构匹配", PclUi.Green,
+                Color.FromRgb(0xE9, 0xF7, 0xEF), Color.FromRgb(0xDD, 0xF3, 0xE6), PclUi.Green);
             return;
         }
 

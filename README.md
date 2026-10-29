@@ -126,7 +126,8 @@ patcher-lab/
 ├─ src/
 │  ├─ PclPatcher/                   命令行补丁器（net10.0）
 │  │  ├─ Program.cs                 入口、参数解析、主流程
-│  │  ├─ Profiles.cs                已知版本、SHA-256 与方法指纹
+│  │  ├─ Profiles.cs                已知版本、SHA-256、渠道与方法指纹
+│  │  ├─ BuildIdentity.cs           渠道识别、结构指纹匹配、--identify / --adopt
 │  │  ├─ Probes.cs                  PatchPlan 能力探测（不改模块）
 │  │  ├─ Patches.Download.cs        下载页与 UI 入口补丁
 │  │  ├─ Patches.Modpack.cs         整合包安装、加载器、自更新
@@ -162,7 +163,7 @@ GUI 的 `Assets` 不单独存图：图标统一来自 `assets/icon/`，通过链
 | 构建 | Windows 10/11 x64、.NET SDK 10.0.400+（`global.json` 固定 10.0.403） |
 | GUI 编译 | 本机安装 PCL，默认 `D:\Minecraft\Plain Craft Launcher 2.exe` |
 | GUI 运行 | .NET Framework 4.8（Windows 10/11 自带） |
-| 补丁目标 | PCL 2.99.0.1+（见 `Profiles.cs`） |
+| 补丁目标 | PCL 2.99.0.0+（正式版与快照版，见 `Profiles.cs` 与 [VERSIONS.md](VERSIONS.md)） |
 
 PCL 只在编译期提供 `Plain Craft Launcher 2` 程序集引用，以及运行期加载控件 /
 字体；**不会**被打进发布包。
@@ -207,8 +208,9 @@ GUI：
    运行中的进程反查它的 exe 路径，无需全盘扫描；
 3. 输出文件默认就是源文件（原地补丁）；
 4. 在“补丁选项”里选择解锁范围：“同时解锁联机”**默认勾选**（下载 + 联机）；
-   取消勾选则**只解锁下载**。随后点“开始补丁”，先结束正在运行的 PCL，
-   再自动备份为 `.bak` 并原子替换；
+   取消勾选则**只解锁下载**。“禁用更新”**默认勾选**，否则打好的旧版本会在启动时
+   被 PCL 自更新换回新版（例如 2.99.0.0 被换成 2.99.0.1）。随后点“开始补丁”，
+   先结束正在运行的 PCL，再自动备份为 `.bak` 并原子替换；
 5. 随时用“还原备份”恢复原版。
 
 用过的路径会记在 `%LOCALAPPDATA%\PclPatcher\settings.json`（最多 5 条），下次启动
@@ -250,6 +252,9 @@ GUI 默认以管理员权限启动（`app.manifest` 的 `requireAdministrator`�
 | `--no-update` | 把 `ModSecret.UpdateStart` 改成 `ret`，禁用自更新 |
 | `--no-stop` | 不自动结束正在运行的 PCL |
 | `--fingerprints` | 打印关键方法指纹 |
+| `--identify` | 机器可读的构建身份（`exact` / `structural` / `unknown`，GUI 使用） |
+| `--adopt` | 打印新构建的渠道、哈希、指纹、Probe 矩阵与可粘贴的 profile 条目 |
+| `--adopt --save` | 同上，并写入 `%LOCALAPPDATA%\PclPatcher\profiles.tsv`（可用 `PCLPATCHER_PROFILES` 改路径） |
 | `--profiles` | 输出机器可读的受支持版本列表（GUI 使用，无需源文件） |
 
 ## 补丁步骤
@@ -269,7 +274,7 @@ GUI 默认以管理员权限启动（`app.manifest` 的 `requireAdministrator`�
 | `LinkNoticeText` | 把联机页的示例文本换成节点停服/自建说明（仅联机范围） |
 | `LinkPeerHint` | 改写“设置 → 联机 → 自定义节点”的悬停说明（仅联机范围） |
 | `LinkPeerButtons` | 隐藏“节点状态”按钮，把“贡献节点”按钮换成 EasyTier 官网链接（仅联机范围） |
-| `DisableSelfUpdate` | 可选：`--no-update` 时 stub 掉自更新 |
+| `DisableSelfUpdate` | 可选：`--no-update` 时 stub 掉自更新（GUI 默认勾选“禁用更新”） |
 
 `RestoreLinkEntry` 起七个联机步骤只在勾选“同时解锁联机”时执行；命令行加
 `--download-only` 等价于取消勾选，只应用下载相关步骤。
@@ -290,11 +295,38 @@ GUI 默认以管理员权限启动（`app.manifest` 的 `requireAdministrator`�
 
 ## 版本适配
 
-受支持版本表在 `src/PclPatcher/Profiles.cs`：`Version + SHA-256 + 7 个方法指纹`。
-新增版本只需加一条 profile，GUI 会通过 `PclPatcher --profiles` 自动跟随，无需改 UI。
+受支持版本表在 `src/PclPatcher/Profiles.cs`：`版本 + 渠道 + SHA-256 + 7 个方法指纹`。
+GUI 会通过 `PclPatcher --profiles` 自动跟随，新增版本无需改 UI。
 
-未知版本默认拒绝写入；可先用 `--dry-run` 观察每个步骤的 `Ready / Already /
-Missing`，或用 `--force` 强制尝试（可能产出不可运行的文件）。
+**正式版与快照版分开记**：快照版和正式版共用数字版本号（快照版日志是
+`快照版 2.99.0.0`，`FileVersion` 仍是 `2.99.0.0`），所以 profile 多了 `Channel`
+字段，渠道由启动器写在程序集里的 `快照版 2.99.0.0` / `正式版 2.99.0.0` 文本识别。
+
+构建身份按三段判定，**后续快照版通常不需要改任何代码**：
+
+| 顺序 | 判据 | 结果 | 需要 `--force` |
+|---|---|---|---|
+| 1 | SHA-256 命中 profile | 精确匹配 | 否 |
+| 2 | 7 个锚点指纹全部命中 | 结构匹配（快照重建走这里） | 否 |
+| 3 | 都不命中 | 未知构建 | 是，或先 `--adopt` 收录 |
+
+第 2 段照样跑全部 `Probe`、写盘前后两轮 `Verify` 与全模块 IL 校验，所以“跳过哈希”
+不等于“跳过检查”。GUI 对未收录构建会先调 `PclPatcher --identify`，结构匹配时直接
+显示“2.99.0.0 快照版（结构匹配）”，不需要勾选“允许未知版本”。
+
+锚点真的移动时，一条命令收录（无需重新编译，GUI 立即生效）：
+
+```powershell
+.\dist\PclPatcher.exe "新的 PCL.exe" --adopt          # 打印渠道/哈希/指纹/Probe 矩阵/C# 条目
+.\dist\PclPatcher.exe "新的 PCL.exe" --adopt --save   # 写入 %LOCALAPPDATA%\PclPatcher\profiles.tsv
+```
+
+已归档的官方版本、来源提交、SHA-256、快照版验证结论见 [VERSIONS.md](VERSIONS.md)，
+实现细节见 [PCL-PATCHER.md](PCL-PATCHER.md) 的「2.2 快照版与后续版本的自动适配」。
+
+未知且结构也不匹配的版本默认拒绝写入；可先用 `--dry-run` 观察每个步骤的 `Ready /
+Already / Missing`，或用 `--force` 强制尝试（仍会逐项 Probe/Verify，但可能产出
+不可运行的文件）。
 
 更完整的 IL 分析、控制流重建与实测结论见 [PCL-PATCHER.md](PCL-PATCHER.md)。
 

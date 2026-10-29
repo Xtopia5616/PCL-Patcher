@@ -14,6 +14,7 @@ publish/
 dist-gui/
 pcl-work/
 .pclpatcher/
+.versions/
 crash.log
 PclPatcher-extract.log
 
@@ -24,3 +25,10 @@ PclPatcher-extract.log
 Thumbs.db
 Desktop.ini
 .DS_Store
+
+# Local binaries and UI test scratch
+.test/
+
+# Patched PCL copies (never distribute)
+out/
+
