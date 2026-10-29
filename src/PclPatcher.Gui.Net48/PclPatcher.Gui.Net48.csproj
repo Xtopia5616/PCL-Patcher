@@ -1,0 +1,84 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>PclPatcher.Gui.Net48</RootNamespace>
+    <AssemblyName>PclPatcher.Gui.Net48</AssemblyName>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <ApplicationIcon>..\..\assets\icon\pcl-patcher.ico</ApplicationIcon>
+
+    <!-- The user's own PCL build supplies the WPF controls and the PCL English
+         font. Override when PCL lives elsewhere:
+         dotnet build -p:PclLauncherPath="D:\Games\Plain Craft Launcher 2.exe" -->
+    <PclLauncherPath Condition="'$(PclLauncherPath)' == ''">D:\Minecraft\Plain Craft Launcher 2.exe</PclLauncherPath>
+
+    <!-- Payloads embedded into the single-file GUI. build.ps1 creates them in
+         build order; a standalone project build publishes the patcher first. -->
+    <PclPatcherPayloadExe>$(MSBuildThisFileDirectory)..\..\dist\PclPatcher.exe</PclPatcherPayloadExe>
+    <PclPatcherManagedDir>$(MSBuildThisFileDirectory)..\PclPatcher\bin\$(Configuration)\net10.0\</PclPatcherManagedDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="Plain Craft Launcher 2">
+      <HintPath>$(PclLauncherPath)</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net48" PrivateAssets="all" />
+  </ItemGroup>
+
+  <!-- Single source of truth for the artwork: ../../assets/icon. -->
+  <ItemGroup>
+    <Resource Include="..\..\assets\icon\pcl-patcher-icon-256.png" Link="Assets\PCLPatcher-256.png" />
+    <Resource Include="..\..\assets\icon\pcl-patcher-mark-256.png" Link="Assets\PCLPatcher-mark-256.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Page Remove="Controls\PclTheme.xaml" />
+    <EmbeddedResource Include="Controls\PclTheme.xaml">
+      <LogicalName>PclPatcher.Gui.Net48.PclTheme.xaml</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <!-- The self-contained exe is always used unless .NET 10 is installed; the
+       framework-dependent copy then runs through the signed dotnet.exe host. -->
+  <ItemGroup>
+    <EmbeddedResource Include="$(PclPatcherPayloadExe)">
+      <LogicalName>PclPatcher.Payload.PclPatcher.exe</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="$(PclPatcherManagedDir)PclPatcher.dll">
+      <LogicalName>PclPatcher.Payload.PclPatcher.dll</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="$(PclPatcherManagedDir)PclPatcher.deps.json">
+      <LogicalName>PclPatcher.Payload.PclPatcher.deps.json</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="$(PclPatcherManagedDir)PclPatcher.runtimeconfig.json">
+      <LogicalName>PclPatcher.Payload.PclPatcher.runtimeconfig.json</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="$(PclPatcherManagedDir)dnlib.dll">
+      <LogicalName>PclPatcher.Payload.dnlib.dll</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <Target Name="CheckPclLauncher" BeforeTargets="PrepareForBuild">
+    <Error Condition="!Exists('$(PclLauncherPath)')"
+           Text="找不到 PCL 主程序：$(PclLauncherPath)。请用 -p:PclLauncherPath=&quot;...\Plain Craft Launcher 2.exe&quot; 指定路径。" />
+  </Target>
+
+  <!-- A clean `dotnet build` on the GUI alone must still produce the embedded
+       payload; build.ps1 normally does this first, so the target is a no-op there. -->
+  <Target Name="EnsurePatcherPayload" BeforeTargets="PrepareForBuild"
+          Condition="!Exists('$(PclPatcherPayloadExe)') Or !Exists('$(PclPatcherManagedDir)PclPatcher.dll') Or !Exists('$(PclPatcherManagedDir)PclPatcher.deps.json') Or !Exists('$(PclPatcherManagedDir)PclPatcher.runtimeconfig.json') Or !Exists('$(PclPatcherManagedDir)dnlib.dll')">
+    <Message Importance="high" Text="==&gt; 发布 PclPatcher payload" />
+    <Exec Command="dotnet build &quot;$(MSBuildThisFileDirectory)..\PclPatcher\PclPatcher.csproj&quot; -c $(Configuration) --nologo"
+          StandardOutputImportance="Low" />
+    <Exec Command="dotnet publish &quot;$(MSBuildThisFileDirectory)..\PclPatcher\PclPatcher.csproj&quot; -c $(Configuration) -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true --nologo -o &quot;$(MSBuildThisFileDirectory)..\..\dist&quot;"
+          StandardOutputImportance="Low" />
+  </Target>
+
+</Project>

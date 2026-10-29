@@ -1,0 +1,26 @@
+# Build output
+bin/
+obj/
+dist/
+artifacts/
+publish/
+.vs/
+*.user
+*.suo
+*.cache
+
+# Local experiments and leftovers
+.trash/
+dist-gui/
+pcl-work/
+.pclpatcher/
+crash.log
+PclPatcher-extract.log
+
+# Patch backups
+*.bak
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store

@@ -1,0 +1,13 @@
+<Project>
+
+  <!-- Central package versions: individual projects only declare the package. -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageVersion Include="dnlib" Version="4.5.0" />
+    <PackageVersion Include="Microsoft.NETFramework.ReferenceAssemblies.net48" Version="1.0.3" />
+  </ItemGroup>
+
+</Project>
