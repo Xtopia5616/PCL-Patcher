@@ -272,6 +272,8 @@ GUI 默认以管理员权限启动（`app.manifest` 的 `requireAdministrator`�
 | `LinkRequireCustomPeer` | 未填自定义节点时提示并中止（仅联机范围，不内置默认节点） |
 | `LinkPrecheckCustomPeer` | 建房/加入前先检查节点（仅联机范围） |
 | `LinkNoticeText` | 把联机页的示例文本换成节点停服/自建说明（仅联机范围） |
+| `LinkPeerHint` | 改写“设置 → 联机 → 自定义节点”的悬停说明（仅联机范围） |
+| `LinkPeerButtons` | 隐藏“节点状态”按钮，把“贡献节点”按钮换成 EasyTier 官网链接（仅联机范围） |
 | `DisableSelfUpdate` | 可选：`--no-update` 时 stub 掉自更新 |
 
 `RestoreLinkEntry` 起五个联机步骤只在勾选“同时解锁联机”时执行；命令行加

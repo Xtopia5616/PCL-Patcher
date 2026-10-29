@@ -360,6 +360,17 @@ internal static partial class Program
             $"{declaringType}::{name}/{paramCount} is not referenced by the target module");
     }
 
+    /// <summary>
+    /// Resolves a framework type that the module only references (TypeRef). The
+    /// module's own types are still reachable through the TypeDef table.
+    /// </summary>
+    private static ITypeDefOrRef FindTypeRefOrDef(ModuleDef module, string fullName)
+    {
+        foreach (var typeRef in module.GetTypeRefs())
+            if (typeRef.FullName == fullName) return typeRef;
+        return FindType(module, fullName);
+    }
+
     private static bool HasString(CilBody body, string value)
         => body.Instructions.Any(i => i.OpCode == OpCodes.Ldstr && i.Operand is string s && s == value);
 }

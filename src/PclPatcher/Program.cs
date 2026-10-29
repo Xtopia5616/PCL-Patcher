@@ -237,6 +237,8 @@ internal static partial class Program
             plan.Add(new("LinkRequireCustomPeer", true, ProbeLinkRequireCustomPeer, PatchLinkRequireCustomPeer, VerifyLinkRequireCustomPeer));
             plan.Add(new("LinkPrecheckCustomPeer", true, ProbeLinkPrecheckCustomPeer, PatchLinkPrecheckCustomPeer, VerifyLinkPrecheckCustomPeer));
             plan.Add(new("LinkNoticeText", true, ProbeLinkNoticeText, PatchLinkNoticeText, VerifyLinkNoticeText));
+            plan.Add(new("LinkPeerHint", true, ProbeLinkPeerHint, PatchLinkPeerHint, VerifyLinkPeerHint));
+            plan.Add(new("LinkPeerButtons", true, ProbeLinkPeerButtons, PatchLinkPeerButtons, VerifyLinkPeerButtons));
         }
 
         if (noUpdate)

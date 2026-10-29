@@ -50,6 +50,7 @@ PCL.ModSecret::RestrictMcDownload  literal=True  const=True
 | `LinkRequireCustomPeer` | 重建 `GetTargetPeers`：没有填自定义节点时给出明确提示并中止，不再请求已失效的节点列表 |
 | `LinkPrecheckCustomPeer` | 在“创建房间/加入房间”入口先检查 `LinkCustomPeer`，为空时直接提示，不再先弹端口/邀请码输入框 |
 | `LinkNoticeText` | `PageLinkMain.InitializeComponent` 加载后把联机页的示例文本按钮改成节点停服/自建说明 |
+| `LinkPeerHint` | `PageSetupLink.InitializeComponent` 加载后改写“自定义节点”输入框的 ToolTip（原文案还在推荐已停服的公共节点） |
 | `DisableSelfUpdate` | 可选 `--no-update`：把 `ModSecret.UpdateStart` 直接 `ret`，防止更新器覆盖补丁 |
 
 `RestoreLinkEntry` 起五个联机步骤只有在启用联机范围时才加入 PatchPlan；
@@ -120,6 +121,8 @@ PageLaunchLeft.RefreshButtonsUI
 | `LinkRequireCustomPeer` | 没有自定义节点时提示并中止（联机组，不内置默认节点） |
 | `LinkPrecheckCustomPeer` | 建房/加入入口先检查节点（联机组） |
 | `LinkNoticeText` | 替换联机页示例文本为节点说明（联机组） |
+| `LinkPeerHint` | 改写“设置 → 联机 → 自定义节点”的悬停说明（联机组） |
+| `LinkPeerButtons` | 隐藏“节点状态”按钮，把“贡献节点”按钮换成 EasyTier 官网链接（联机组） |
 
 成功日志：
 
@@ -273,6 +276,20 @@ Dialogs.SelectFile("选择整合包压缩文件", False, Nothing, Nothing)
 - 联机页底部的“示例文本 www.meloong.com”原本是 PCL 自带 XAML 里 `PanAlways` 下的示例
   按钮；`LinkNoticeText` 会在 `InitializeComponent` 加载后把它替换成节点停服/自建说明，
   并设置对应的 ToolTip。
+- “设置 → 联机 → 自定义节点”的说明文字是 `PageSetupLink.xaml` 里 `TextCustomPeer` 的
+  **ToolTip**（不是单独的 TextBlock），原文案还在让你填 `public.easytier.cn` 这类已经停服
+  的公共节点。`LinkPeerHint` 在 `PageSetupLink.InitializeComponent` 加载后直接
+  `TextCustomPeer.ToolTip = 新文案`，同样不改 BAML/.resources，也就不会碰上资源长度和偏移问题。
+- 卡片下面的两个按钮也一起处理了（`LinkPeerButtons`）：它们没有 `x:Name`，取不到字段，于是往
+  `PCL.PageSetupLink` 里新增一个私有静态方法 `FixLinkPeerButtons(DependencyObject)`，从 `PanMain`
+  往下递归 `Panel.Children`，用 `MyButton.Text` 判断是哪一个：
+  - 含“贡献”的按钮 → `Text = "EasyTier 官网"`、换 ToolTip，并把 `CustomEventService.EventData`
+    改成 `https://easytier.cn/`（点击仍走原来的“打开网页”事件）；
+  - 含“状态”的按钮（`节点状态`，指向已下线的 `uptime.easytier.cn`）→ `Visibility = Collapsed`。
+
+  `MyCard` 本身就是 `Grid`，卡片内容也是 `Grid`/`StackPanel`，整棵子树基本是 `Panel`，所以不需要
+  `VisualTreeHelper`；递归只认 `Panel.Children` 和 `Decorator.Child`（`MyCard` 内部可能用 `Border`
+  包一层内容），因此也不用等布局完成，`InitializeComponent` 里就能走完。
 - 官方配置若以后删掉 `Link` 段，模块下载与启动参数会缺失，需要重新适配。
 - `PageSetupUI.HiddenRefresh` 的写死可见性意味着“设置 → 界面 → 隐藏联机页”开关
   不再生效。
