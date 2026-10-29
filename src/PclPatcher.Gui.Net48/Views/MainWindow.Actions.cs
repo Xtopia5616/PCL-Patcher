@@ -232,6 +232,8 @@ public partial class MainWindow : Window
     // named "--restore" and report "文件不存在" right after a successful restore.
     private async Task RunPatcherAsync(List<string> args, string target, bool restore = false)
     {
+        // A probe that is still running must not overwrite the live step states.
+        _probeGeneration++;
         _noOp = false;
         _writeDenied = false;
         SetBusy(true);
@@ -270,6 +272,10 @@ public partial class MainWindow : Window
             Arguments = string.Join(" ", commandArgs.Select(Quote))
         };
 
+        // Re-read the per-step states after a successful run: a patch turns every
+        // row into "已应用", a restore turns them back into "待应用". A failed run
+        // keeps its red rows, so the failure stays visible in the panel.
+        var refreshProbe = false;
         try
         {
             using var process = new Process { StartInfo = psi, EnableRaisingEvents = true };
@@ -283,6 +289,7 @@ public partial class MainWindow : Window
 
             if (process.ExitCode == 0)
             {
+                refreshProbe = true;
                 if (!restore) _steps.Complete();
                 _log.SetState(LogState.Done);
                 if (restore)
@@ -327,6 +334,7 @@ public partial class MainWindow : Window
                 }
                 else
                 {
+                    refreshProbe = false;
                     SetStatus("输出文件未生成", StatusTone.Error);
                     ShowResult(ResultTone.Error, "patcher 返回成功，但没有找到输出文件。", true, false);
                 }
@@ -372,6 +380,10 @@ public partial class MainWindow : Window
         {
             _runningProcess = null;
             SetBusy(false);
+            // Only in-place runs change the file the panel describes; a save-as
+            // run leaves the source as it was, so its live “完成” rows stay.
+            if (refreshProbe && SamePath(target, CurrentSource()))
+                _ = RefreshStepProbeAsync(CurrentSource());
         }
     }
 

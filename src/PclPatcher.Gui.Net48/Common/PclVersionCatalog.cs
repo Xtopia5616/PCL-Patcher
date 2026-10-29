@@ -49,21 +49,30 @@ internal sealed class PclBuildProfile
 internal sealed class PclVersionCatalog
 {
     private const string ProfileTag = "profile";
+    private const string FeatureTag = "feature";
     private const string UnknownLabel = "未检测到版本";
     public const string UnknownBuildLabel = "未识别版本";
 
     private readonly List<PclBuildProfile> _profiles;
 
-    private PclVersionCatalog(List<PclBuildProfile> profiles)
+    private PclVersionCatalog(List<PclBuildProfile> profiles, bool supportsProbe)
     {
         _profiles = profiles;
+        SupportsProbe = supportsProbe;
     }
 
-    public static PclVersionCatalog Empty { get; } = new PclVersionCatalog(new List<PclBuildProfile>());
+    public static PclVersionCatalog Empty { get; } = new PclVersionCatalog(new List<PclBuildProfile>(), false);
 
     public IReadOnlyList<PclBuildProfile> Profiles => _profiles;
 
     public bool IsLoaded => _profiles.Count > 0;
+
+    /// <summary>
+    /// True when the patcher advertises <c>--probe</c>. An older patcher would
+    /// ignore the unknown switch and start a real in-place patch, so the GUI only
+    /// asks for per-step states after this handshake.
+    /// </summary>
+    public bool SupportsProbe { get; }
 
     public string MinimumVersion => IsLoaded ? _profiles[0].Version : string.Empty;
 
@@ -120,9 +129,16 @@ internal sealed class PclVersionCatalog
         if (string.IsNullOrEmpty(output)) return Empty;
 
         var profiles = new List<PclBuildProfile>();
+        var supportsProbe = false;
         foreach (var raw in output!.Split('\n'))
         {
             var fields = raw.TrimEnd('\r').Split('\t');
+            if (fields.Length > 1 && string.Equals(fields[0], FeatureTag, StringComparison.Ordinal))
+            {
+                if (string.Equals(fields[1].Trim(), "probe", StringComparison.OrdinalIgnoreCase))
+                    supportsProbe = true;
+                continue;
+            }
             if (fields.Length < 4) continue;
             if (!string.Equals(fields[0], ProfileTag, StringComparison.Ordinal)) continue;
 
@@ -140,7 +156,7 @@ internal sealed class PclVersionCatalog
         }
 
         profiles.Sort((a, b) => CompareVersions(a, b));
-        return profiles.Count == 0 ? Empty : new PclVersionCatalog(profiles);
+        return profiles.Count == 0 ? Empty : new PclVersionCatalog(profiles, supportsProbe);
     }
 
     private static int CompareVersions(PclBuildProfile left, PclBuildProfile right)

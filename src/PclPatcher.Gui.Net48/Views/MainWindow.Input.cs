@@ -324,6 +324,7 @@ public partial class MainWindow : Window
             RefreshBackupState();
             RefreshLaunchReadiness();
             SyncVersionSelection();
+            ClearStepProbe();
             SetSourceStrip("未选择 PCL 主程序", "待选择", PclUi.Muted,
                 Color.FromRgb(0xF3, 0xF6, 0xFA), Color.FromRgb(0xEC, 0xEF, 0xF4), PclUi.Muted);
             return;
@@ -339,6 +340,7 @@ public partial class MainWindow : Window
             RefreshBackupState();
             RefreshLaunchReadiness();
             SyncVersionSelection();
+            ClearStepProbe();
             SetSourceStrip("文件不存在，请重新选择", "文件不存在", PclUi.Red,
                 Color.FromRgb(0xFD, 0xEC, 0xEC), Color.FromRgb(0xFA, 0xD7, 0xD7), PclUi.Red);
             return;
@@ -361,6 +363,7 @@ public partial class MainWindow : Window
     {
         var generation = ++_infoGeneration;
         _structuralLabel = null;
+        _ = RefreshStepProbeAsync(path);
         SetSourceStrip("正在校验文件…", "校验中", PclUi.Accent,
             Color.FromRgb(0xEA, 0xF2, 0xFE), Color.FromRgb(0xE8, 0xF1, 0xFF), PclUi.Accent);
 

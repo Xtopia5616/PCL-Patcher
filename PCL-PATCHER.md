@@ -177,6 +177,9 @@ build <TAB> 版本 <TAB> sha256 <TAB> 渠道 <TAB> 构建日期 <TAB> 方法=指
 ```
 
 `--profiles` 会同时列出内置与外部条目；重复的 SHA-256 以先出现的为准。
+输出头部的 `profiles 4` 之后有 `feature probe` 能力标记：GUI 只有看到它才会调用
+`--probe` 读取逐步骤状态；旧 patcher 不认识未知开关，会把它当成一次正常的原地补丁，
+这个握手就是用来避免误写的。
 
 GUI 对未收录的构建会先跑一次 `PclPatcher --identify`：返回 `match=structural`
 时版本行显示“2.99.0.0 快照版（结构匹配）”，可以直接开始补丁，不需要勾选
@@ -448,6 +451,7 @@ dotnet build .\src\PclPatcher\PclPatcher.csproj -c Release
 --no-update            # 把 ModSecret.UpdateStart 改成 ret，禁用自更新
 --no-stop              # 不自动结束正在运行的 PCL
 --fingerprints         # 打印关键方法指纹，供新版本适配
+--probe                # 机器可读的逐步骤状态（GUI 选中文件时读取，不写文件）
 --profiles             # 输出受支持的版本列表（GUI 读取，无源文件也可运行）
 ```
 
@@ -516,7 +520,7 @@ PCL 风格的圆形高亮 + 轻阴影，窗口不提供最大化按钮（与 PCL
 
 页面分为三页：
 
-- **补丁**：主程序 / 输出 / 选项，右侧是完整的补丁流程与运行环境（步骤随解锁范围增减）；窗口变窄时自动收成单列；
+- **补丁**：主程序 / 输出 / 选项，右侧是完整的补丁流程与运行环境（步骤随解锁范围增减，选中文件后先逐项探测并显示 待应用 / 已应用 / 未匹配）；窗口变窄时自动收成单列；
 - **日志**：实时彩色日志、自动滚动、复制、清空；patcher 的启动横幅（署名 + 题记
   “Some birds aren't meant to be caged…”）会作为每次运行的日志开头；
 - **关于**：应用信息、龙腾猫跃署名、PCL 项目与许可、Minecraft 正版提示。
@@ -540,8 +544,9 @@ UAC，拿到管理员权限后再点“开始补丁”/“还原备份”不会�
 关于页署名：**Xtopia**（开发协助：DeepSeek，本工具作者），并保留 PCL 作者龙腾猫跃的控件与设计署名。
 
 警告、覆盖确认、启动前正版提示使用 PCL 风格的自绘对话框，不再弹出系统 MessageBox。
-可拖入 exe；`Ctrl+O` 浏览、`F5` 开始、`Ctrl+1/2/3` 切页。启动日志按步骤名同步更新
-「补丁流程」，失败时把当前步骤标红。
+可拖入 exe；`Ctrl+O` 浏览、`F5` 开始、`Ctrl+1/2/3` 切页。选中文件或切换补丁选项时，
+GUI 调 `PclPatcher --probe` 把每个步骤的 Probe 结果填进「补丁流程」（待应用 / 已应用 /
+未匹配，悬停可看原因），不用先点开始；运行日志再按步骤名同步更新，失败时把当前步骤标红。
 
 字体 `PCL English` 在运行时从用户本机 PCL 的 `resources/font.ttf` 提取到
 `%LOCALAPPDATA%\PclPatcher\Fonts` 再加载，不随发布包分发。
@@ -611,8 +616,10 @@ Copy-Item "D:\Minecraft\Plain Craft Launcher 2.exe" .\PCL-inplace.exe
 .\dist\PclPatcher.exe .\PCL-inplace.exe --restore  # 从 .bak 还原
 ```
 
-GUI 的手工回归：拖入副本 → 开始补丁 → 日志页应依次出现 13 个 `patch :` 步骤（`--no-update` 时为 14 个）与
-`verify : output reloaded`；再点“还原备份”，源文件 SHA-256 应回到原始值。
+GUI 的手工回归：拖入副本 → 右侧流程应先逐项显示状态（原版为“待应用”）→ 开始补丁 →
+日志页应依次出现 13 个 `patch :` 步骤（`--no-update` 时为 14 个）与
+`verify : output reloaded`；再点“还原备份”，源文件 SHA-256 应回到原始值，
+右侧重新探测后应回到“待应用”。
 
 不开界面就能验证 IL 合法性：用 Windows PowerShell 5.1（.NET Framework）加载补丁产物，
 `RuntimeHelpers.PrepareMethod` 会强制 JIT 目标方法，非法 IL 会立刻抛异常：

@@ -5,6 +5,7 @@ internal enum StepState
     Pending,
     Active,
     Done,
+    Ready,
     Already,
     Skip,
     Error,
@@ -46,6 +47,7 @@ internal sealed class StepPanel : StackPanel
     private readonly List<StepRow> _rows = new List<StepRow>();
     private bool _noUpdate;
     private bool _link = true;
+    private bool _probeMode;
 
     public event Action Updated;
 
@@ -117,14 +119,51 @@ internal sealed class StepPanel : StackPanel
 
     public void Reset()
     {
+        _probeMode = false;
         foreach (var row in _rows)
         {
-            var disabled = (!_link && IsLink(row.Key)) ||
-                           (row.Key == "DisableSelfUpdate" && !_noUpdate);
-            Set(row, disabled ? StepState.Disabled : StepState.Pending, false);
+            row.Root.ToolTip = row.Note;
+            Set(row, IsDisabled(row) ? StepState.Disabled : StepState.Pending, false);
         }
         Updated?.Invoke();
     }
+
+    /// <summary>
+    /// Idle-state report for the selected file: each enabled step gets its Probe
+    /// result (ready / already / missing), so the list answers "what is already
+    /// applied here?" before a run starts. Rows disabled by the current options
+    /// keep their “未启用” look, and rows missing from the report fall back to
+    /// “待探测” instead of keeping a stale result.
+    /// </summary>
+    public void ShowProbe(IReadOnlyList<PclStepProbeResult> probes)
+    {
+        if (probes is null || probes.Count == 0) return;
+
+        _probeMode = true;
+        var reported = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var probe in probes)
+        {
+            var row = _rows.Find(r => r.Key == probe.Key);
+            if (row is null || !reported.Add(row.Key)) continue;
+            if (IsDisabled(row)) continue;
+
+            row.Root.ToolTip = string.IsNullOrWhiteSpace(probe.Reason)
+                ? row.Note
+                : row.Note + Environment.NewLine + probe.Reason;
+            Set(row, probe.State, false);
+        }
+
+        foreach (var row in _rows)
+        {
+            if (reported.Contains(row.Key) || IsDisabled(row)) continue;
+            row.Root.ToolTip = row.Note;
+            Set(row, StepState.Pending, false);
+        }
+        Updated?.Invoke();
+    }
+
+    private bool IsDisabled(StepRow row) =>
+        (!_link && IsLink(row.Key)) || (row.Key == "DisableSelfUpdate" && !_noUpdate);
 
     public void ActivateFirst()
     {
@@ -304,7 +343,7 @@ internal sealed class StepPanel : StackPanel
         Set(row, StepState.Pending, false);
     }
 
-    private static void Set(StepRow row, StepState state, bool animate = true)
+    private void Set(StepRow row, StepState state, bool animate = true)
     {
         if (row.State == state && row.Glyph.Text.Length > 0) return;
         row.State = state;
@@ -327,6 +366,14 @@ internal sealed class StepPanel : StackPanel
                 circle = PclUi.Green;
                 ink = Colors.White;
                 glyph = "\uE73E";
+                break;
+            case StepState.Ready:
+                // Probed and applicable, not applied yet. The numbering keeps the
+                // execution order, the accent colour separates it from “not probed”.
+                circle = Color.FromRgb(0xE8, 0xF1, 0xFF);
+                ink = PclUi.Accent;
+                glyph = (row.Root.Parent as Panel)?.Children.IndexOf(row.Root) is int r ? (r + 1).ToString() : "•";
+                useIcon = false;
                 break;
             case StepState.Already:
                 circle = Color.FromRgb(0xE8, 0xF1, 0xFF);
@@ -394,14 +441,16 @@ internal sealed class StepPanel : StackPanel
 
         var suffix = state switch
         {
-            StepState.Skip => " · 已跳过",
+            StepState.Ready => " · 待应用",
+            StepState.Skip => _probeMode ? " · 未匹配" : " · 已跳过",
             StepState.Disabled => " · 未启用",
-            StepState.Error => " · 失败",
-            StepState.Already => " · 已是补丁状态",
+            StepState.Error => _probeMode ? " · 探测失败" : " · 失败",
+            StepState.Already => _probeMode ? " · 已应用" : " · 已是补丁状态",
             _ => string.Empty
         };
         row.NoteText.Text = row.Note + suffix;
         row.Root.Opacity = state == StepState.Disabled ? 0.62 : 1.0;
+        if (state == StepState.Disabled) row.Root.ToolTip = row.Note;
 
         if (state == StepState.Active && animate)
         {

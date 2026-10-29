@@ -194,6 +194,10 @@ public partial class MainWindow : Window
             SetBackupHint(_restoreAvailable);
             RefreshLaunchReadiness();
         }
+
+        // The handshake decides whether --probe may be used, so retry the step
+        // report once the patcher's capability list has actually arrived.
+        if (_sourceBox is not null) _ = RefreshStepProbeAsync(CurrentSource());
     }
 
     /// <summary>

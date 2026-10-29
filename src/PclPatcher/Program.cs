@@ -27,6 +27,9 @@ internal static partial class Program
 
             var source = ResolveSource(args);
             if (args.Contains("--identify")) return Identify(source);
+            if (args.Contains("--probe"))
+                return ReportProbes(source, includeLink: !args.Contains("--download-only"),
+                    noUpdate: args.Contains("--no-update"));
             if (args.Contains("--adopt"))
                 return Adopt(source, includeLink: !args.Contains("--download-only"), save: args.Contains("--save"));
 
@@ -227,13 +230,17 @@ internal static partial class Program
 
     /// <summary>
     /// Tab separated profile list consumed by the GUIs. The number after the
-    /// "profiles" tag is the format version (3 = added channel/label/verified/built),
+    /// "profiles" tag is the format version (4 = added the feature handshake),
     /// not the build count. Header/tag lines keep the format self-describing, and
     /// extra fields/lines can be added without breaking the parser in PclVersionCatalog.
     /// </summary>
     private static void PrintProfiles()
     {
-        Console.WriteLine("profiles\t3");
+        Console.WriteLine("profiles\t4");
+        // A GUI must not call --probe on a patcher that predates it: the old
+        // parser ignores unknown switches, so it would start a normal in-place
+        // patch instead. The handshake makes --probe opt-in.
+        Console.WriteLine("feature\tprobe");
         foreach (var profile in Profiles)
             Console.WriteLine(
                 $"profile\t{profile.Version}\t{profile.Sha256}\t{profile.Fingerprints.Count}\t{profile.Channel}\t{profile.Label}\t" +
@@ -247,7 +254,7 @@ internal static partial class Program
         if (source is null)
             throw new InvalidOperationException(
                 "usage: PclPatcher <PCL.exe> [output.exe] [--restore] [--dry-run] [--force] [--allow-partial] " +
-                "[--download-only] [--no-update] [--no-stop] [--fingerprints] [--identify] [--adopt] [--profiles]");
+                "[--download-only] [--no-update] [--no-stop] [--fingerprints] [--identify] [--adopt] [--probe] [--profiles]");
         return Path.GetFullPath(source);
     }
 

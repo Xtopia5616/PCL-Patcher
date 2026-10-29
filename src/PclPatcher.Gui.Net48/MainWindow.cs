@@ -138,6 +138,7 @@ public partial class MainWindow : Window
     private bool _lastKnown;
     private string _structuralLabel;
     private int _infoGeneration;
+    private int _probeGeneration;
 
     public MainWindow(string pclPath)
     {

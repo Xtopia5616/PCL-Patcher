@@ -7,6 +7,44 @@ internal static partial class Program
     // ---------------------------------------------------------------------
 
     /// <summary>
+    /// Machine readable per-step report used by the GUI when a file is selected:
+    /// every step of the current option set with its Probe state, without
+    /// touching the file. Unlike <c>--adopt</c> it needs no profile match, so an
+    /// unlisted build still shows which steps are applicable.
+    /// </summary>
+    private static int ReportProbes(string source, bool includeLink, bool noUpdate)
+    {
+        if (!File.Exists(source)) throw new FileNotFoundException("source not found", source);
+
+        using var module = ModuleDefMD.Load(source);
+        Console.WriteLine("probe\t1");
+        Console.WriteLine($"version\t{FileVersionInfo.GetVersionInfo(source).FileVersion ?? "<unknown>"}");
+        foreach (var step in BuildPlan(noUpdate, includeLink))
+        {
+            string state;
+            string reason;
+            try
+            {
+                var probe = step.Probe(module);
+                (state, reason) = probe.State switch
+                {
+                    PatchState.Ready => ("ready", probe.Reason),
+                    PatchState.AlreadyPatched => ("already", probe.Reason),
+                    _ => ("missing", probe.Reason)
+                };
+            }
+            catch (Exception ex)
+            {
+                state = "error";
+                reason = ex.Message;
+            }
+
+            Console.WriteLine($"patch\t{step.Name}\t{state}\t{reason}");
+        }
+        return 0;
+    }
+
+    /// <summary>
     /// True when the module carries this tool's download patch: the three required
     /// anchors are already in their patched shape. Used to tell a patched copy
     /// apart from a newer executable that merely sits next to an old <c>.bak</c>;

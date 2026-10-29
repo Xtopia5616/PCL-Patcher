@@ -178,8 +178,16 @@ public partial class MainWindow : Window
         _stopPclBox.Checked = true;
         _forceBox = AddOption(optionBody, "允许未知版本", "哈希与结构指纹都不匹配时才需要：跳过校验强制写入", false);
         var forceHint = (TextBlock)((Grid)_forceBox.Parent).Children[1];
-        _noUpdateBox.Change += (_, isChecked) => _steps?.SetNoUpdate(isChecked);
-        _linkUnlockBox.Change += (_, isChecked) => _steps?.SetLink(isChecked);
+        _noUpdateBox.Change += (_, isChecked) =>
+        {
+            _steps?.SetNoUpdate(isChecked);
+            _ = RefreshStepProbeAsync(CurrentSource());
+        };
+        _linkUnlockBox.Change += (_, isChecked) =>
+        {
+            _steps?.SetLink(isChecked);
+            _ = RefreshStepProbeAsync(CurrentSource());
+        };
         _forceBox.Change += (_, isChecked) =>
         {
             forceHint.Foreground = PclUi.Frozen(isChecked ? PclUi.Amber : PclUi.Muted);
@@ -269,6 +277,7 @@ public partial class MainWindow : Window
         stepsHead.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         stepsHead.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         _stepsCount = PclUi.Label("0/9", 11, PclUi.Muted, FontWeights.SemiBold);
+        _stepsCount.ToolTip = "已应用 / 启用的步骤数；选择 PCL 后会逐项探测";
         Grid.SetColumn(_stepsCount, 1);
         stepsHead.Children.Add(_stepsCount);
         stepsBody.Children.Add(stepsHead);
