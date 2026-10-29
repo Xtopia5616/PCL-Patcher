@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/icon/pcl-patcher-icon-256.png" width="120" height="120" alt="PCL Patcher 图标">
+</p>
+
 # PCL Patcher
 
 > **仅供学习研究 · 24 小时内删除**
@@ -22,6 +26,13 @@ Plain Craft Launcher (PCL) 的第三方 IL 补丁工具。
 
 许可证：[MIT](LICENSE)（原创部分；PCL 派生文件除外） · 免责声明：[DISCLAIMER.md](DISCLAIMER.md) ·
 第三方说明：[NOTICE.md](NOTICE.md)
+
+<p align="center">
+  <img src="assets/screenshot/gui.png" width="820" alt="PCL Patcher 主界面：选择 PCL 主程序、校验版本指纹、执行补丁步骤">
+</p>
+<p align="center">
+  <sub>主界面：选择 PCL 主程序 → 校验版本与指纹 → 逐步应用补丁 → 随时还原 <code>.bak</code> 备份</sub>
+</p>
 
 ## 合规与法律风险
 
@@ -116,10 +127,11 @@ patcher-lab/
 │     ├─ App.xaml(.cs)              启动、PCL 程序集 / 字体 / 主题加载
 │     ├─ MainWindow.cs              窗口字段与构造函数
 │     ├─ Views/                     补丁页、日志页、关于页等分页代码
-│     ├─ Controls/                  PCL 风格控件封装、日志面板、自绘对话框
-│     ├─ Common/                    版本目录解析（读取 `--profiles`）
+│     ├─ Controls/                  PCL 风格控件封装、日志面板、自绘对话框、PCL 查找窗口
+│     ├─ Common/                    版本目录（`--profiles`）、PCL 定位、快捷方式解析、本地设置
 │     └─ Properties/AssemblyInfo.cs
 ├─ assets/icon/                     图标源文件、生成脚本
+├─ assets/screenshot/               界面 / 流程截图与截取脚本
 ├─ build.ps1                        一键构建
 ├─ PclPatcher.sln                   解决方案（两个项目）
 ├─ Directory.Build.props            项目公共元数据
@@ -173,10 +185,23 @@ dotnet build .\src\PclPatcher.Gui.Net48\PclPatcher.Gui.Net48.csproj -c Release
 
 GUI：
 
-1. 选择或确认 PCL 主程序；
-2. 输出文件默认就是源文件（原地补丁）；
-3. 点“开始补丁”，先结束正在运行的 PCL，再自动备份为 `.bak` 并原子替换；
-4. 随时用“还原备份”恢复原版。
+1. 确认 PCL 主程序。不确定就点“自动检测”，它按代价从低到高检查：上次使用的路径 →
+   桌面 / 开始菜单快捷方式 → 注册表（App Paths、卸载项、最近运行记录）→
+   常见目录浅层扫描（固定盘根、Program Files、桌面 / 下载 / 文档）；
+2. 如果都没找到，查找窗口会保持打开并持续观察进程：此时启动一次 PCL，就会直接从
+   运行中的进程反查它的 exe 路径，无需全盘扫描；
+3. 输出文件默认就是源文件（原地补丁）；
+4. 点“开始补丁”，先结束正在运行的 PCL，再自动备份为 `.bak` 并原子替换；
+5. 随时用“还原备份”恢复原版。
+
+用过的路径会记在 `%LOCALAPPDATA%\PclPatcher\settings.json`（最多 5 条），下次启动
+优先复查，通常不需要再点“自动检测”。
+
+GUI 默认以管理员权限启动（`app.manifest` 的 `requireAdministrator`）：双击时 Windows
+会弹一次 UAC，之后补丁 / 还原都不再单独申请权限，也不会因为提权重启而丢掉当前选择。
+代价有两点：提权窗口收不到从资源管理器拖入的文件（UIPI 隔离），拖拽请改用“浏览…”；
+「启动 PCL」经 `explorer.exe` 代启，PCL 及其拉起的 Java 仍是普通权限。自动化或截图
+场景不想被 UAC 挡住时，用 `dotnet build -p:PclPatcherNoElevation=true` 构建普通权限版本。
 
 命令行：
 
@@ -218,6 +243,13 @@ GUI：
 
 每一步都有 `Probe`（不修改模块）、`Apply`、`Verify`；写盘前做全模块 IL 校验，
 写盘后重新加载再校验。已打补丁的文件再次运行会直接返回 `already`。
+
+<p align="center">
+  <img src="assets/screenshot/flow.png" width="420" alt="补丁流程面板：六个步骤依次 Probe / Apply / Verify">
+</p>
+<p align="center">
+  <sub>补丁流程面板：左侧序号在运行时依次变成状态图标（进行中 / 完成 / 已跳过 / 失败）</sub>
+</p>
 
 ## 版本适配
 

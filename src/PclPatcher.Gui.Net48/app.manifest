@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  PCL Patcher GUI 的应用清单。
+
+  requireAdministrator：GUI 启动时直接向 Windows 申请管理员权限。这样补丁 / 还原
+  在点击时就已经有写权限，不再像以前那样先弹“需要管理员权限”再以 runas 重启
+  （会丢掉当前已选好的源文件、日志和步骤状态）。
+
+  Windows 的规则决定了“默认管理员”最多只能做到这里：每次启动仍会有一次 UAC
+  确认。要做到零提示，只能关掉 UAC（不建议），或改用计划任务以最高权限启动。
+
+  提权带来的两个约束，代码里必须照顾到：
+    1. 提权窗口收不到从资源管理器拖进来的文件（UIPI 隔离），拖拽入口会失效，
+       请用“浏览…”按钮；
+    2. 提权进程直接 Process.Start 子进程会让子进程继承管理员令牌，所以“启动
+       PCL”必须经 explorer.exe 代启，让 PCL 回到普通用户完整性级别。
+-->
+<assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
+  <assemblyIdentity version="1.0.0.0" name="PclPatcher.Gui.Net48" />
+
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
+    <security>
+      <requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">
+        <requestedExecutionLevel level="requireAdministrator" uiAccess="false" />
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+      <!-- Windows 10 / 11 -->
+      <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}" />
+      <!-- Windows 8.1 -->
+      <supportedOS Id="{1f676c76-80e1-4239-95bb-83d0f6d0da78}" />
+      <!-- Windows 8 -->
+      <supportedOS Id="{4a2f28e3-53b9-4441-ba9c-d69d4a4a6e38}" />
+      <!-- Windows 7 -->
+      <supportedOS Id="{35138b9a-5d96-4fbd-8e2d-a2440225f93a}" />
+    </application>
+  </compatibility>
+</assembly>

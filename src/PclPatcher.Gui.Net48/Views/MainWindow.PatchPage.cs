@@ -1,4 +1,4 @@
-﻿namespace PclPatcher.Gui.Net48;
+namespace PclPatcher.Gui.Net48;
 
 public partial class MainWindow : Window
 {
@@ -65,17 +65,18 @@ public partial class MainWindow : Window
         _sourceBox.TextChanged += (_, _) => SourceBox_TextChanged();
         sourceRow.Children.Add(_sourceBox);
 
-        var browse = PclUi.Button("浏览", BrowseSource, 34);
-        browse.Padding = new Thickness(12, 0, 12, 0);
-        browse.Margin = new Thickness(6, 0, 0, 0);
-        Grid.SetColumn(browse, 1);
-        sourceRow.Children.Add(browse);
+        _browseButton = PclUi.Button("浏览", BrowseSource, 34);
+        _browseButton.Padding = new Thickness(12, 0, 12, 0);
+        _browseButton.Margin = new Thickness(6, 0, 0, 0);
+        Grid.SetColumn(_browseButton, 1);
+        sourceRow.Children.Add(_browseButton);
 
-        var detect = PclUi.Button("自动检测", AutoDetectSource, 34);
-        detect.Padding = new Thickness(12, 0, 12, 0);
-        detect.Margin = new Thickness(6, 0, 0, 0);
-        Grid.SetColumn(detect, 2);
-        sourceRow.Children.Add(detect);
+        _detectButton = PclUi.Button("自动检测", AutoDetectSource, 34);
+        _detectButton.Padding = new Thickness(12, 0, 12, 0);
+        _detectButton.Margin = new Thickness(6, 0, 0, 0);
+        _detectButton.ToolTip = "在本机查找 PCL：记住的路径、快捷方式、注册表、常见目录，以及正在运行的 PCL 进程";
+        Grid.SetColumn(_detectButton, 2);
+        sourceRow.Children.Add(_detectButton);
         sourceBody.Children.Add(sourceRow);
 
         _sourceStrip = new Border

@@ -1,4 +1,4 @@
-﻿namespace PclPatcher.Gui.Net48;
+namespace PclPatcher.Gui.Net48;
 
 public partial class App : Application
 {
@@ -146,16 +146,41 @@ public partial class App : Application
 
     private static string FindPcl(string[] args)
     {
-        var candidates = new[]
+        var settings = AppSettings.Load();
+        var seeds = new List<string>
         {
             args.FirstOrDefault(),
             IOPath.Combine(AppDomain.CurrentDomain.BaseDirectory, "Plain Craft Launcher 2.exe"),
             IOPath.Combine(Environment.CurrentDirectory, "Plain Craft Launcher 2.exe"),
             @"D:\Minecraft\Plain Craft Launcher 2.exe"
         };
+        seeds.AddRange(settings.RecentPclPaths);
 
-        var found = candidates.FirstOrDefault(p => !string.IsNullOrWhiteSpace(p) && File.Exists(p));
-        if (found is not null) return IOPath.GetFullPath(found);
+        // Startup stays cheap: only the registered locations and remembered
+        // paths are checked. The deeper shallow walk belongs to the 自动检测
+        // button, which can afford to run for a couple of seconds.
+        var found = PclLocator.QuickScan(new PclScanOptions { Seeds = seeds, IncludeShallow = false });
+        if (found.Count > 0) return Remember(settings, found[0].Path);
+
+        // PCL may already be open; then its image path is exact.
+        var running = PclLocator.RunningProcesses();
+        if (running.Count > 0) return Remember(settings, running[0].Path);
+
+        while (true)
+        {
+            var answer = MessageBox.Show(
+                "没有在本机找到 Plain Craft Launcher。\n\n" +
+                "请先启动一次 PCL（它会自动被识别），然后点「是」重新检测。\n" +
+                "也可以点「否」手动选择 PCL 文件。",
+                "PCL Patcher", MessageBoxButton.YesNo, MessageBoxImage.Information);
+            if (answer != MessageBoxResult.Yes) break;
+
+            var detected = PclLocator.QuickScan(new PclScanOptions { Seeds = seeds });
+            if (detected.Count > 0) return Remember(settings, detected[0].Path);
+
+            var nowRunning = PclLocator.RunningProcesses();
+            if (nowRunning.Count > 0) return Remember(settings, nowRunning[0].Path);
+        }
 
         var dialog = new OpenFileDialog
         {
@@ -163,7 +188,14 @@ public partial class App : Application
             Filter = "PCL 主程序|Plain Craft Launcher 2.exe|可执行文件|*.exe",
             CheckFileExists = true
         };
-        return dialog.ShowDialog() == true ? dialog.FileName : null;
+        if (dialog.ShowDialog() != true) return null;
+        return Remember(settings, dialog.FileName);
+    }
+
+    private static string Remember(AppSettings settings, string path)
+    {
+        settings.Remember(path);
+        return path;
     }
 
     private static FontFamily LoadPclFont(Assembly pcl)

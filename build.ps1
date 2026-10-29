@@ -64,6 +64,15 @@ if (-not (Test-Path $guiExe)) { throw "GUI 构建产物不存在：$guiExe" }
 Copy-Item $guiExe $dist -Force
 Remove-Item (Join-Path $dist '*.pdb') -Force -ErrorAction SilentlyContinue
 
+# 提权清单校验：增量构建可能复用旧的编译产物（尤其是切换过
+# -p:PclPatcherNoElevation=true 之后），这里直接读最终 exe 的 RT_MANIFEST 文本，
+# 免得把普通权限版本悄悄发布出去。
+$distGui = Join-Path $dist 'PclPatcher.Gui.Net48.exe'
+$manifestText = [System.Text.Encoding]::UTF8.GetString([System.IO.File]::ReadAllBytes($distGui))
+if (-not $manifestText.Contains('level="requireAdministrator"')) {
+    throw "GUI 没有 requireAdministrator 清单，可能复用了旧产物。请用 dotnet build --no-incremental（或删掉 obj/）重新构建。"
+}
+
 Write-Host ''
 Get-ChildItem $dist -File | ForEach-Object {
     Write-Host ('  {0,-28} {1,7:F1} MB' -f $_.Name, ($_.Length / 1MB)) -ForegroundColor Green

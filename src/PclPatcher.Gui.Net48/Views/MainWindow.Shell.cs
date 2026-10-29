@@ -1,4 +1,4 @@
-﻿namespace PclPatcher.Gui.Net48;
+namespace PclPatcher.Gui.Net48;
 
 public partial class MainWindow : Window
 {
@@ -123,7 +123,7 @@ public partial class MainWindow : Window
         });
         left.Children.Add(new TextBlock
         {
-            Text = "Xtopia & DeepSeek",
+            Text = "IL 补丁工具",
             FontFamily = PclUi.Font,
             FontSize = 10.5,
             Foreground = PclUi.Brush(0xFF, 0xFF, 0xFF, 0xB8),

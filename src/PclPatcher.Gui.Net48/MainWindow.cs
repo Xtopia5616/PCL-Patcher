@@ -1,4 +1,4 @@
-﻿namespace PclPatcher.Gui.Net48;
+namespace PclPatcher.Gui.Net48;
 
 public partial class MainWindow : Window
 {
@@ -60,6 +60,8 @@ public partial class MainWindow : Window
     private PCL.MyButton _openButton;
     private PCL.MyButton _launchButton;
     private PCL.MyButton _restoreButton;
+    private PCL.MyButton _browseButton;
+    private PCL.MyButton _detectButton;
     private TextBlock _backupHint;
     private TextBlock _versionPillLabel;
     private bool _restoreAvailable;
@@ -109,7 +111,11 @@ public partial class MainWindow : Window
     private StackPanel _headerTabs;
     private readonly List<HeaderTab> _headerTabItems = new List<HeaderTab>();
 
+    private readonly AppSettings _settings = AppSettings.Load();
     private bool _busy;
+    private bool _detecting;
+    private CancellationTokenSource _detectCts;
+    private string _detectNote;
     private bool _compact;
     private bool _suppressText;
     private bool _noOp;

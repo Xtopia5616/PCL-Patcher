@@ -327,6 +327,7 @@ public partial class MainWindow : Window
 
     private void OnClosing(object sender, System.ComponentModel.CancelEventArgs e)
     {
+        _detectCts?.Cancel();
         if (!_busy) return;
         var quit = PclDialog.Show(this,
             "补丁正在运行",

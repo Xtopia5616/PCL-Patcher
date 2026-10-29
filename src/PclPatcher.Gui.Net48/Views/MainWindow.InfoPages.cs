@@ -67,7 +67,6 @@ public partial class MainWindow : Window
         var heroText = new StackPanel { Margin = new Thickness(14, 2, 0, 0), VerticalAlignment = VerticalAlignment.Center };
         heroText.Children.Add(PclUi.Label("Plain Craft Launcher (PCL) Patcher", 14.5, PclUi.Ink, FontWeights.SemiBold, true));
         heroText.Children.Add(PclUi.Label("第三方 · 非官方补丁工具", 11.5, PclUi.Muted));
-        heroText.Children.Add(PclUi.Label("作者：Xtopia（开发协助：DeepSeek）", 11.5, PclUi.Accent));
         Grid.SetColumn(heroText, 1);
         heroHeader.Children.Add(heroText);
         heroBody.Children.Add(heroHeader);
@@ -104,9 +103,6 @@ public partial class MainWindow : Window
 
         var credits = PclUi.Card("署名与许可", out var creditsBody, 10);
         right.Children.Add(credits);
-        var author = PclUi.Label("本工具作者：Xtopia（开发协助：DeepSeek）", 12.5, PclUi.Ink, FontWeights.SemiBold);
-        author.Margin = new Thickness(0, 0, 0, 8);
-        creditsBody.Children.Add(author);
 
         var credit = new TextBlock
         {
@@ -158,6 +154,18 @@ public partial class MainWindow : Window
         disclaimer.LineHeight = 18;
         disclaimer.Margin = new Thickness(0, 8, 0, 0);
         legalBody.Children.Add(disclaimer);
+
+        legalBody.Children.Add(PclUi.Separator(9, 9));
+        var reopen = new TextBlock
+        {
+            FontFamily = PclUi.Font,
+            FontSize = 11.5,
+            Foreground = PclUi.MutedBrush,
+            TextWrapping = TextWrapping.Wrap
+        };
+        reopen.Inlines.Add(MakeInlineLink("查看免责声明与使用风险提示", ShowDisclaimerReadOnly));
+        reopen.Inlines.Add(new Run("（首次使用时需确认，更新条款后需重新确认）"));
+        legalBody.Children.Add(reopen);
 
         scroll.Content = root;
         return scroll;

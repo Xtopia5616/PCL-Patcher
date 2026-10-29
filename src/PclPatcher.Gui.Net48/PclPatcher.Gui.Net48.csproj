@@ -10,6 +10,11 @@
     <Nullable>disable</Nullable>
     <ApplicationIcon>..\..\assets\icon\pcl-patcher.ico</ApplicationIcon>
 
+    <!-- 默认要求管理员权限（app.manifest 里的 requireAdministrator）：启动时一次
+         UAC，之后补丁 / 还原不再二次提权。自动化（截图、UI 测试）里不想被 UAC
+         挡住时，用 -p:PclPatcherNoElevation=true 构建一个普通权限的临时版本。 -->
+    <ApplicationManifest Condition="'$(PclPatcherNoElevation)' != 'true'">app.manifest</ApplicationManifest>
+
     <!-- The user's own PCL build supplies the WPF controls and the PCL English
          font. Override when PCL lives elsewhere:
          dotnet build -p:PclLauncherPath="D:\Games\Plain Craft Launcher 2.exe" -->

@@ -8,7 +8,7 @@ public partial class MainWindow : Window
 
     private async void Start_Click()
     {
-        if (_busy) return;
+        if (_busy || _detecting) return;
 
         var source = _sourceBox.Text?.Trim().Trim('"') ?? string.Empty;
         var output = _outputBox.Text?.Trim().Trim('"') ?? string.Empty;
@@ -432,6 +432,8 @@ public partial class MainWindow : Window
         _stopPclBox.IsEnabled = !busy;
         _forceBox.IsEnabled = !busy;
         _startButton.IsEnabled = !busy;
+        if (_detectButton is not null) _detectButton.IsEnabled = !busy;
+        if (_browseButton is not null) _browseButton.IsEnabled = !busy;
         if (_startPill != null)
         {
             _startPill.Opacity = busy ? 0.55 : 1.0;
@@ -506,10 +508,12 @@ public partial class MainWindow : Window
 
         try
         {
-            Process.Start(new ProcessStartInfo(output)
+            // 本窗口默认是提权的（app.manifest: requireAdministrator），直接启动
+            // output 会让 PCL 连同 Java 一起继承管理员令牌。经 explorer.exe（普通
+            // 权限的 shell 进程）代启，PCL 才会回到用户自己的完整性级别。
+            Process.Start(new ProcessStartInfo("explorer.exe", $"\"{output}\"")
             {
-                UseShellExecute = true,
-                WorkingDirectory = IOPath.GetDirectoryName(output)
+                UseShellExecute = true
             });
         }
         catch (Exception ex)

@@ -1,4 +1,4 @@
-﻿namespace PclPatcher.Gui.Net48;
+namespace PclPatcher.Gui.Net48;
 
 public partial class MainWindow : Window
 {
@@ -56,7 +56,7 @@ public partial class MainWindow : Window
     {
         var files = GetDropFiles(e);
         HideDropOverlay();
-        if (files.Length == 0) return;
+        if (files.Length == 0 || _detecting) return;
         e.Handled = true;
         SetSource(files[0]);
     }
@@ -85,14 +85,20 @@ public partial class MainWindow : Window
         {
             EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
         });
+
+        // The risk notice is modal and comes before any page data is loaded:
+        // until it is acknowledged, nothing in the window is usable.
+        if (!EnsureDisclaimerAccepted()) return;
+
         UpdatePatcherInfo();
         SetSource(_pclPath);
         UpdateResponsiveLayout();
     }
 
-    private void SetSource(string path)
+    private void SetSource(string path, string note = null)
     {
         if (string.IsNullOrWhiteSpace(path)) return;
+        _detectNote = note;
         path = path.Trim().Trim('"');
         try
         {
@@ -121,11 +127,172 @@ public partial class MainWindow : Window
         _ = UpdateSourceInfoAsync(path);
     }
 
-    private void AutoDetectSource() => SetSource(_pclPath);
+    // ------------------------------------------------------------------
+    // Detection
+    // ------------------------------------------------------------------
+
+    private async void AutoDetectSource()
+    {
+        if (_detecting)
+        {
+            _detectCts?.Cancel();
+            return;
+        }
+        if (_busy) return;
+
+        _detecting = true;
+        _detectCts = new CancellationTokenSource();
+        var token = _detectCts.Token;
+        _sourceBox.IsEnabled = false;
+        if (_browseButton is not null) _browseButton.IsEnabled = false;
+        if (_detectButton is not null)
+        {
+            _detectButton.Text = "取消";
+            _detectButton.ToolTip = "停止查找";
+        }
+        SetSourceStrip("正在本机查找 PCL…", "查找中", PclUi.Accent,
+            Color.FromRgb(0xEA, 0xF2, 0xFE), Color.FromRgb(0xE8, 0xF1, 0xFF), PclUi.Accent);
+
+        List<PclCandidate> found = null;
+        try
+        {
+            var options = new PclScanOptions
+            {
+                Seeds = DetectSeeds(),
+                MinimumVersion = _catalog.MinimumVersion
+            };
+            var progress = new Progress<PclScanUpdate>(OnScanProgress);
+            found = await PclLocator.QuickScanAsync(options, progress, token);
+        }
+        catch (OperationCanceledException)
+        {
+            // The user pressed 取消; keep whatever path was already in the box.
+        }
+        catch (Exception ex)
+        {
+            SetSourceStrip("查找失败：" + ex.Message, "查找失败", PclUi.Red,
+                Color.FromRgb(0xFD, 0xEC, 0xEC), Color.FromRgb(0xFA, 0xD7, 0xD7), PclUi.Red);
+        }
+        finally
+        {
+            _detecting = false;
+            _detectCts?.Dispose();
+            _detectCts = null;
+            if (_sourceBox is not null) _sourceBox.IsEnabled = true;
+            if (_browseButton is not null) _browseButton.IsEnabled = !_busy;
+            if (_detectButton is not null)
+            {
+                _detectButton.Text = "自动检测";
+                _detectButton.ToolTip =
+                    "在本机查找 PCL：记住的路径、快捷方式、注册表、常见目录，以及正在运行的 PCL 进程";
+            }
+        }
+
+        if (!IsLoaded) return;
+
+        if (token.IsCancellationRequested)
+        {
+            await RefreshSourceStripAsync();
+            return;
+        }
+        if (found is null) return;
+
+        if (found.Count > 0 && IsConfident(found))
+        {
+            ApplyDetected(found[0].Path, found[0].Source);
+            return;
+        }
+
+        var picker = new PclFinderWindow(found, _catalog.MinimumVersion) { Owner = this };
+        if (picker.ShowDialog() == true && !string.IsNullOrEmpty(picker.SelectedPath))
+        {
+            var match = found.FirstOrDefault(c => string.Equals(c.Path, picker.SelectedPath, StringComparison.OrdinalIgnoreCase));
+            ApplyDetected(picker.SelectedPath, match?.Source ?? "手动选择");
+        }
+        else
+        {
+            await RefreshSourceStripAsync();
+        }
+    }
+
+    private List<string> DetectSeeds()
+    {
+        var seeds = new List<string>();
+        if (!string.IsNullOrEmpty(_pclPath)) seeds.Add(_pclPath);
+
+        var typed = _sourceBox?.Text?.Trim().Trim('"');
+        if (!string.IsNullOrEmpty(typed)) seeds.Add(typed);
+
+        foreach (var recent in _settings.RecentPclPaths) seeds.Add(recent);
+
+        seeds.Add(IOPath.Combine(AppDomain.CurrentDomain.BaseDirectory, "Plain Craft Launcher 2.exe"));
+        seeds.Add(IOPath.Combine(Environment.CurrentDirectory, "Plain Craft Launcher 2.exe"));
+
+        return seeds
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private void OnScanProgress(PclScanUpdate update)
+    {
+        if (!_detecting || update is null) return;
+
+        string text;
+        if (update.Candidate is not null && !string.IsNullOrEmpty(update.Candidate.Path))
+            text = "已找到 " + IOPath.GetFileName(update.Candidate.Path) + " · " + update.Candidate.Source;
+        else
+        {
+            text = update.Status ?? "正在查找…";
+            if (update.Count > 0) text += "（已找到 " + update.Count + " 个）";
+        }
+
+        SetSourceStrip(text, "查找中", PclUi.Accent,
+            Color.FromRgb(0xEA, 0xF2, 0xFE), Color.FromRgb(0xE8, 0xF1, 0xFF), PclUi.Accent);
+    }
+
+    private static bool IsConfident(IReadOnlyList<PclCandidate> candidates)
+    {
+        if (candidates.Count == 0) return false;
+        var best = candidates[0];
+        if (best.Score < 60) return false;
+        if (candidates.Count == 1) return true;
+        return best.Score - candidates[1].Score >= 20;
+    }
+
+    private void ApplyDetected(string path, string source)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return;
+        var note = string.IsNullOrEmpty(source) ? null : "自动检测（" + source + "）";
+        SetSource(path, note);
+        _settings.Remember(path);
+    }
+
+    private async Task RefreshSourceStripAsync()
+    {
+        var path = _sourceBox?.Text?.Trim().Trim('"') ?? string.Empty;
+        if (path.Length == 0)
+        {
+            SetSourceStrip("未选择 PCL 主程序", "待选择", PclUi.Muted,
+                Color.FromRgb(0xF3, 0xF6, 0xFA), Color.FromRgb(0xEC, 0xEF, 0xF4), PclUi.Muted);
+            return;
+        }
+        if (!File.Exists(path))
+        {
+            SetSourceStrip("文件不存在，请重新选择", "文件不存在", PclUi.Red,
+                Color.FromRgb(0xFD, 0xEC, 0xEC), Color.FromRgb(0xFA, 0xD7, 0xD7), PclUi.Red);
+            return;
+        }
+        await UpdateSourceInfoAsync(path);
+    }
+
+    private string WithDetectNote(string text)
+        => _detectNote is null ? text : text + " · " + _detectNote;
 
     private void SourceBox_TextChanged()
     {
         if (_suppressText || _busy) return;
+        _detectNote = null;
         var path = _sourceBox.Text?.Trim().Trim('"') ?? string.Empty;
         _sourceBox.ToolTip = path.Length == 0 ? null : path;
         ShowPathTail(_sourceBox);
@@ -220,7 +387,7 @@ public partial class MainWindow : Window
             _lastBackupKnown = _catalog.Matches(backupHash);
 
             var shortHash = hash.Length >= 16 ? hash.Substring(0, 16) : hash;
-            _sourceMeta.Text = $"{version} · {size:F1} MB · SHA-256 {shortHash}…";
+            _sourceMeta.Text = WithDetectNote($"{version} · {size:F1} MB · SHA-256 {shortHash}…");
             _sourceMeta.ToolTip = path + Environment.NewLine + "SHA-256: " + hash;
             if (_restoreAvailable)
                 _sourceMeta.ToolTip += Environment.NewLine + "备份: " + backup;
@@ -242,7 +409,8 @@ public partial class MainWindow : Window
     private void RefreshHashBadge()
     {
         if (_lastHash is null) return;
-        var meta = $"{_lastVersion} · {_lastSize:F1} MB · SHA-256 {_lastHash.Substring(0, Math.Min(16, _lastHash.Length))}…";
+        var meta = WithDetectNote(
+            $"{_lastVersion} · {_lastSize:F1} MB · SHA-256 {_lastHash.Substring(0, Math.Min(16, _lastHash.Length))}…");
         if (!_catalog.IsLoaded)
         {
             // The patcher is the authority on supported builds; until its profile

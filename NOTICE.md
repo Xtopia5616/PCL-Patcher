@@ -106,6 +106,9 @@ PCL.exe，并通过 `AssemblyResolve` 从该 exe 的 `PCL.Resources.resources`
 到 `%LOCALAPPDATA%\PclPatcher\Fonts` 后加载，**不随发布包分发**；删除本机
 PCL 后字体会自动回退到 Microsoft YaHei UI。
 
+GUI 还会在 `%LOCALAPPDATA%\PclPatcher\settings.json` 记录最近使用过的 PCL
+路径（最多 5 条），仅供本机自动检测使用，不会上传。
+
 ## 6. Minecraft
 
 本工具不提供 Minecraft 游戏本体，也不绕过正版验证。游玩 Minecraft 请购买正版：
