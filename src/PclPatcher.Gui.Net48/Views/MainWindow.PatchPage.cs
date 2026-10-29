@@ -8,28 +8,51 @@ public partial class MainWindow : Window
 
     private FrameworkElement BuildPatchPage()
     {
-        var scroll = new ScrollViewer
-        {
-            Style = (Style)Application.Current.FindResource("ScrollViewerFullMargin"),
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            CanContentScroll = false,
-            Padding = new Thickness(0),
-            Background = Brushes.Transparent
-        };
-
+        // The page fills the window and each column scrolls on its own. A single
+        // page-level scrollbar used to stretch to the taller column (the step
+        // list), so scrolling dragged the settings cards away and left the
+        // bottom-left corner empty.
         var root = new Grid { Margin = new Thickness(22, 20, 22, 16) };
         root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         _rightColumn = new ColumnDefinition { Width = new GridLength(272) };
         root.ColumnDefinitions.Add(_rightColumn);
         _patchRoot = root;
 
+        // Left column: the cards scroll if the window gets short, while the
+        // action row stays pinned to the bottom edge of the column.
+        var leftColumn = new Grid();
+        leftColumn.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        leftColumn.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.Children.Add(leftColumn);
+
         _leftStack = new StackPanel();
-        _rightStack = new StackPanel { Margin = new Thickness(14, 0, 0, 0) };
-        Grid.SetColumn(_leftStack, 0);
-        Grid.SetColumn(_rightStack, 1);
-        root.Children.Add(_leftStack);
-        root.Children.Add(_rightStack);
+        _rightStack = new StackPanel();
+
+        var leftScroll = new ScrollViewer
+        {
+            Style = (Style)Application.Current.FindResource("ScrollViewerFullMargin"),
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            CanContentScroll = false,
+            Padding = new Thickness(0),
+            Background = Brushes.Transparent,
+            Content = _leftStack
+        };
+        leftColumn.Children.Add(leftScroll);
+
+        var rightScroll = new ScrollViewer
+        {
+            Style = (Style)Application.Current.FindResource("ScrollViewerFullMargin"),
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            CanContentScroll = false,
+            Padding = new Thickness(0),
+            Background = Brushes.Transparent,
+            Margin = new Thickness(14, 0, 0, 0),
+            Content = _rightStack
+        };
+        Grid.SetColumn(rightScroll, 1);
+        root.Children.Add(rightScroll);
 
         // Source card -----------------------------------------------------
         var sourceCard = PclUi.Card("PCL 主程序", out var sourceBody, 10);
@@ -235,7 +258,11 @@ public partial class MainWindow : Window
         _statusPill = BuildStatusPill();
         Grid.SetColumn(_statusPill, 4);
         actions.Children.Add(_statusPill);
-        _leftStack.Children.Add(actions);
+
+        // Pinned below the scrolling cards rather than scrolling with them.
+        actions.Margin = new Thickness(0, 12, 0, 0);
+        Grid.SetRow(actions, 1);
+        leftColumn.Children.Add(actions);
 
         // Right column: steps + environment -------------------------------
         _stepsCard = PclUi.Card("补丁流程", out var stepsBody, 10);
@@ -269,8 +296,7 @@ public partial class MainWindow : Window
         envBody.Children.Add(EnvRow("网络", "无需联网", PclUi.Ink));
         _rightStack.Children.Add(_envCard);
 
-        scroll.Content = root;
-        return scroll;
+        return root;
     }
 
     private PCL.MyCheckBox AddOption(StackPanel body, string title, string description, bool separator)
