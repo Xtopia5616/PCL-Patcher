@@ -1,230 +1,43 @@
-# PCL Patcher 个人学习研究许可证 1.0
-
-**PCL Patcher Personal Research License 1.0**
+MIT License
 
 Copyright (c) 2026 Xtopia
 
-SPDX-License-Identifier: LicenseRef-PclPatcher-Research-1.0
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-> 本许可证仅适用于 `patcher-lab` 项目中由版权人原创的部分。Plain Craft
-> Launcher (PCL)、dnlib、.NET、Minecraft 及其他第三方组件不适用本许可证，
-> 详见第 6 条与 [NOTICE.md](NOTICE.md)。完整风险提示见
-> [DISCLAIMER.md](DISCLAIMER.md)。
->
-> 说明：本许可证属于“源码可见”（source-available）许可，**不是** OSI
-> 认可的开源许可证。
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-## 1. 定义
-
-1.1 **“本作品”** 指 `patcher-lab` 仓库中由版权人创作的源代码、构建脚本、
-文档、配置、图标及其他材料，但**不包括**：
-
-- (a) 第三方组件（见第 6 条）；
-- (b) `PclTheme.xaml`，以及任何从 PCL 提取或改编的界面样式、字体、图标与资源；
-- (c) `bin/`、`obj/`、`dist/` 等目录中的测试产物、构建中间产物、
-  二进制文件及第三方软件副本；
-- (d) 使用本作品对任何第三方软件进行修改后生成的“补丁产物”。
-
-版权人随项目发布的构建产物（如 `dist/PclPatcher.Gui.Net48.exe`）属于
-本作品，但其内嵌或附带的第三方组件仍适用第 6 条。
-
-1.2 **“补丁产物”** 指使用本作品对 PCL 或其他第三方软件进行修改、重建、
-注入或重新打包后得到的任何文件、程序集、安装包或发行版。
-
-1.3 **“个人学习研究”** 指自然人以学习、教学、安全研究或技术验证为目的，
-在**本人合法持有**的软件副本上进行，且不向他人提供产品或服务的非商业活动。
-
-1.4 **“再分发”** 指以任何形式向第三方提供本作品或其衍生作品的副本，
-包括但不限于上传、发布、镜像、打包、出售、出租、网络传输、随附分发，
-以及将本作品整合进其他产品后发布。
-
-## 2. 授权
-
-在遵守本许可证全部条款的前提下，版权人授予你一项**全球范围、免费、
-非排他、不可转让、可撤销（依第 7 条终止）**的许可，允许你：
-
-- (a) 阅读、研究本作品；
-- (b) 在本地编译、运行本作品；
-- (c) 为个人学习研究在本地修改本作品；
-- (d) 为备份目的制作合理数量的副本。
-
-本许可证不授予你再许可（sublicense）的权利，也不授予你任何专利、商标
-或商业秘密方面的明示或默示许可。版权人保留本许可证未明确授予的一切权利。
-
-## 3. 限制
-
-你**不得**：
-
-3.1 将本作品或其衍生作品用于任何商业目的，包括但不限于销售、许可、
-订阅、付费服务、内部商业流程，或整合进商业产品或服务。
-
-3.2 再分发本作品或其衍生作品，无论源代码还是二进制形式。
-
-3.3 分发、发布、出售或公开提供任何补丁产物，包括补丁后的 PCL。
-
-3.4 移除、遮蔽或修改本作品中的版权声明、许可证文本、免责声明与第三方署名。
-
-3.5 使用本作品的名称、作者署名或标识，暗示版权人、PCL 作者或其他第三方
-对你的认可、赞助或关联。
-
-3.6 以违反适用法律（包括中国大陆关于游戏出版、进口与运营的监管规定）、
-PCL 的分发许可与合理使用指南、Minecraft 最终用户许可协议，或侵犯任何
-第三方权利的方式使用本作品。
-
-> 第 3.6 条是使用者的独立义务。本许可证不构成对 PCL、Minecraft 或任何
-> 第三方软件的权利许可，也不表示版权人认可任何特定的补丁用途、分发行为
-> 或规避行为。
-
-## 4. 允许的有限引用
-
-你可以在非商业的评论、教学或学术作品中简要引用本作品的代码片段或文档，
-但必须注明出处与作者，且不得构成对本作品实质性部分的再分发。除此以外，
-第 3.2 条仍然适用。
-
-## 5. 无担保
-
-本作品按**“现状”**提供，不附带任何明示或默示的担保，包括但不限于
-适销性、特定用途适用性、权利完整性、不侵权、准确性，以及补丁过程不会
-损坏文件、不会导致数据丢失或不会违反法律的担保。你自行承担使用本作品的
-全部风险。完整免责声明见 [DISCLAIMER.md](DISCLAIMER.md)。
-
-## 6. 第三方组件
-
-本作品包含或依赖的第三方组件由其各自的许可证管辖，本许可证不改变这些
-许可证下的权利与义务。主要包括：
-
-| 组件 | 权利归属 | 许可证 |
-|---|---|---|
-| Plain Craft Launcher (PCL) | 龙腾猫跃 | PCL 分发有限许可 / 合理使用指南 |
-| `PclTheme.xaml`、PCL 字体与控件资源 | 龙腾猫跃 / PCL 项目 | 同上，**不适用本许可证** |
-| dnlib | 0xd4d 及贡献者 | MIT |
-| .NET / WPF | .NET Foundation 及贡献者 | MIT |
-| Minecraft | Mojang Studios / Microsoft | Minecraft EULA |
-
-具体署名与链接见 [NOTICE.md](NOTICE.md)，许可证全文见
-[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。若本许可证与第三方许可证
-冲突，就该第三方组件而言以第三方许可证为准。
-
-## 7. 期限与终止
-
-7.1 本许可证自你获得本作品之日起生效，直至终止。
-
-7.2 你违反本许可证任一条款时，本许可证**自动终止**，无需另行通知。
-
-7.3 终止后，你应立即停止使用本作品，并删除你持有的全部副本、衍生作品
-与补丁产物。
-
-7.4 第 3、5、6、8、9 条在终止后继续有效。
-
-## 8. 责任限制
-
-在适用法律允许的最大范围内，版权人不对因使用或无法使用本作品而产生的
-任何直接、间接、附带、特殊、惩罚性或后果性损害承担责任，包括但不限于
-数据丢失、文件损坏、设备损坏、业务中断、账号封禁、第三方索赔与法律费用。
-本作品免费提供，版权人对你的全部累计责任不超过你为获得本作品实际支付的
-金额（即零）。
-
-## 9. 其他
-
-9.1 本许可证构成双方就本作品达成的完整协议；条款部分无效不影响其余条款
-的效力。
-
-9.2 本许可证不构成法律意见。如你对自身行为的合法性有疑问，请咨询有资质
-的律师。
-
-9.3 本许可证以**中文版本**为准；下方的英文译文仅为方便阅读。
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 ---
 
-## English translation (for convenience only)
+## 适用范围 / Scope
 
-**PCL Patcher Personal Research License 1.0**
+本许可证适用于 `patcher-lab` 中由 Xtopia 原创的源代码、构建脚本、文档、图标
+与配置。以下内容**不适用**本许可证，其权利归各自权利人所有，使用条件见
+[NOTICE.md](NOTICE.md) 与 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)：
 
-Copyright (c) 2026 Xtopia
+- `src/PclPatcher.Gui.Net48/Controls/PclTheme.xaml`（从 PCL `Application.xaml`
+  提取的控件样式）；
+- PCL 本体、PCL 程序集、`PCL English` 字体及 PCL 的其他界面资源；
+- dnlib、.NET / WPF、Microsoft.NETFramework.ReferenceAssemblies 等第三方依赖；
+- 使用本工具修改 PCL 产生的**补丁产物**。
 
-This license applies only to the original portions of the `patcher-lab`
-project created by the copyright holder. Plain Craft Launcher (PCL), dnlib,
-.NET, Minecraft and other third-party components are **not** licensed under
-this license; see Section 6 and [NOTICE.md](NOTICE.md).
+`dist/` 下的发布产物由上述原创代码构建；其中内嵌的 PCL 派生内容仍不适用本
+许可证。本许可证不授予任何 PCL、Minecraft 或第三方软件的权利、豁免或抗辩。
 
-**1. Definitions.** “Work” means the source code, build scripts, documentation,
-configuration, icons and other materials in the `patcher-lab` repository
-created by the copyright holder, excluding (a) third-party components,
-(b) `PclTheme.xaml` and any UI styles, fonts, icons or assets extracted from
-or adapted from PCL, (c) test/build outputs and binaries under `bin/`, `obj/`
-and `dist/`, and (d) “Patched Output”. Build artifacts published by the
-copyright holder (such as `dist/PclPatcher.Gui.Net48.exe`) are part of the Work, but
-third-party components embedded in or bundled with them remain subject to
-Section 6. “Patched Output” means
-any file, assembly, installer or release produced by modifying, rebuilding,
-injecting into or repackaging PCL or any other third-party software using the
-Work. “Personal Study and Research” means non-commercial activity by an
-individual for learning, teaching, security research or technical validation,
-on a software copy that the individual lawfully owns, without providing
-products or services to others. “Redistribute” means providing copies of the
-Work or derivatives to third parties in any form, including uploading,
-publishing, mirroring, packaging, selling, renting, transmitting, bundling,
-or incorporating the Work into another product.
-
-**2. Grant.** Subject to this license, the copyright holder grants you a
-worldwide, royalty-free, non-exclusive, non-transferable, revocable (as
-provided in Section 7) license to (a) read and study the Work, (b) compile and
-run it locally, (c) modify it locally for Personal Study and Research, and (d)
-make a reasonable number of backup copies. No sublicensing is granted. No patent, trademark or trade
-secret license is granted, express or implied. All rights not expressly
-granted are reserved.
-
-**3. Restrictions.** You must not: (3.1) use the Work or derivatives for any
-commercial purpose, including sale, licensing, subscription, paid services,
-internal business processes, or integration into commercial products or
-services; (3.2) redistribute the Work or derivatives, in source or binary
-form; (3.3) distribute, publish, sell or publicly provide any Patched Output,
-including patched PCL; (3.4) remove, obscure or alter copyright notices,
-license text, disclaimers or third-party attributions; (3.5) use the name,
-author attribution or marks of the Work to imply endorsement, sponsorship or
-affiliation by the copyright holder, the PCL author or any third party; or
-(3.6) use the Work in violation of applicable law (including the mainland
-China regulations on game publication, import and operation), PCL's
-distribution license and fair-use guidelines, the Minecraft EULA, or any
-third-party rights.
-Section 3.6 is your independent obligation. This license grants no rights in
-PCL, Minecraft or any third-party software and does not indicate that the
-copyright holder endorses any particular patching, distribution or
-circumvention activity.
-
-**4. Limited Quotation.** You may briefly quote code snippets or
-documentation from the Work in non-commercial commentary, teaching or
-academic work, provided you attribute the source and author and do not
-redistribute a substantial portion of the Work. Section 3.2 otherwise
-remains in effect.
-
-**5. No Warranty.** THE WORK IS PROVIDED “AS IS”, WITHOUT ANY EXPRESS OR
-IMPLIED WARRANTY, INCLUDING BUT NOT LIMITED TO MERCHANTABILITY, FITNESS FOR A
-PARTICULAR PURPOSE, TITLE, NON-INFRINGEMENT, ACCURACY, OR ANY WARRANTY THAT
-PATCHING WILL NOT DAMAGE FILES, CAUSE DATA LOSS OR VIOLATE LAW. YOU BEAR ALL
-RISKS OF USING THE WORK. See [DISCLAIMER.md](DISCLAIMER.md).
-
-**6. Third-Party Components.** Third-party components are governed by their
-own licenses, which this license does not modify. See the table above and
-[NOTICE.md](NOTICE.md). In case of conflict, the third-party license prevails
-for that component.
-
-**7. Term and Termination.** This license is effective from the date you
-obtain the Work until terminated. It terminates automatically, without
-notice, if you breach any term. Upon termination you must stop using the Work
-and delete all copies, derivatives and Patched Output. Sections 3, 5, 6, 8
-and 9 survive termination.
-
-**8. Limitation of Liability.** TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE
-COPYRIGHT HOLDER IS NOT LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
-PUNITIVE OR CONSEQUENTIAL DAMAGES ARISING FROM THE USE OF OR INABILITY TO USE
-THE WORK, INCLUDING DATA LOSS, FILE OR DEVICE DAMAGE, BUSINESS INTERRUPTION,
-ACCOUNT BANS, THIRD-PARTY CLAIMS AND LEGAL FEES. THE WORK IS PROVIDED FREE OF
-CHARGE, AND THE COPYRIGHT HOLDER'S TOTAL AGGREGATE LIABILITY SHALL NOT EXCEED
-THE AMOUNT YOU ACTUALLY PAID FOR THE WORK (ZERO).
-
-**9. Miscellaneous.** This license is the entire agreement regarding the
-Work; if any provision is held invalid, the remaining provisions remain in
-effect. This license is not legal advice; consult a qualified lawyer if you
-are unsure about the legality of your conduct. The Chinese version prevails;
-this English translation is for convenience only.
+This license covers only the original portions of `patcher-lab` created by
+Xtopia. `PclTheme.xaml` (extracted from PCL's `Application.xaml`), PCL itself,
+PCL assemblies, the `PCL English` font, third-party dependencies, and patched
+PCL output are **not** licensed under it. See [NOTICE.md](NOTICE.md).

@@ -5,7 +5,7 @@
 作者：**Xtopia**（开发协助：DeepSeek）
 版权人：**Xtopia**
 
-- 本项目许可证：[LICENSE](LICENSE)（PCL Patcher 个人学习研究许可证 1.0）
+- 本项目许可证：[LICENSE](LICENSE)（MIT；PCL 派生文件除外）
 - 完整免责声明：[DISCLAIMER.md](DISCLAIMER.md)
 - 第三方许可证全文：[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)
 
@@ -14,21 +14,22 @@
 
 ## 1. 本工具自身的许可
 
-`patcher-lab` 中由版权人原创的源代码、构建脚本与文档，按
-[LICENSE](LICENSE) 授权：**仅限个人学习研究，禁止商业使用，禁止再分发
-本工具或补丁产物**。
+`patcher-lab` 中由版权人原创的源代码、构建脚本、文档、图标与配置，按
+[LICENSE](LICENSE) 以 **MIT** 授权：可以商用、修改、再分发，只需在副本或
+实质性部分中保留版权声明与许可证文本。
 
-该许可证属于“源码可见”（source-available）许可，**不是** OSI 认可的开源
-许可证。“源码随项目提供”仅指你可以阅读、编译与研究，不代表可以再分发。
-
-以下内容**不在**本项目许可证范围内：
+以下内容**不在** MIT 范围内：
 
 - PCL 本体、PCL 的嵌入程序集与 PCL 的界面资源；
 - `PclTheme.xaml`（从 PCL `Application.xaml` 提取的控件样式）；
 - PCL 字体 `PCL English`；
-- dnlib、.NET / WPF 等第三方依赖；
-- Minecraft 的任何素材、客户端或服务；
-- `bin/`、`obj/`、`dist/` 中的构建产物与第三方运行时副本。
+- dnlib、.NET / WPF 等第三方依赖（适用各自的 MIT 等许可证）；
+- 用本工具修改 PCL 得到的补丁产物；
+- `bin/`、`obj/`、`dist/` 中内嵌上述第三方内容的构建产物。
+
+本项目属于对 PCL 的**重度使用**：按 PCL《存储库合理使用指南》以 MIT 公开
+源代码、标注第三方来源并按要求署名。MIT 只覆盖原创部分，不能也不应被理解为
+对 PCL 内容的再授权；补丁后的 PCL 仍按 PCL 许可处理，**不得分发**。
 
 ## 2. PCL 署名
 
@@ -45,7 +46,7 @@ UI 控件与设计来自 **Plain Craft Launcher (PCL)**，作者：**龙腾猫�
 - 名称以 `Plain Craft Launcher (PCL)` 开头，并标注“第三方”；
 - 关于页面显著位置保留龙腾猫跃署名与赞助链接；
 - 界面主色保持 PCL 的蓝色系；
-- 源码随项目提供，继续遵守 PCL 的合理使用指南；
+- 以 MIT 公开源代码，并继续遵守 PCL 的合理使用指南；
 - 启动 Minecraft 前提示购买正版。
 
 本工具是第三方非官方工具，**不是** PCL 的官方组件、官方分支或官方发行版，
@@ -59,7 +60,7 @@ UI 控件与设计来自 **Plain Craft Launcher (PCL)**，作者：**龙腾猫�
 | 组件 | 权利归属 | 许可证 / 说明 |
 |---|---|---|
 | Plain Craft Launcher (PCL) | 龙腾猫跃 | PCL 分发有限许可 / 合理使用指南 |
-| `PclTheme.xaml`、PCL 控件样式 | 龙腾猫跃 / PCL 项目 | 同上；仅按合理使用指南复用，不适用本项目许可证 |
+| `PclTheme.xaml`、PCL 控件样式 | 龙腾猫跃 / PCL 项目 | 不适用 MIT；仅按合理使用指南复用 |
 | PCL 字体 `PCL English` | 龙腾猫跃 / PCL 项目 | 运行时从本机 PCL 提取，不随发布包分发 |
 | [dnlib](https://github.com/0xd4d/dnlib) 4.5.0 | 0xd4d 及贡献者 | MIT |
 | .NET / WPF | .NET Foundation 及贡献者 | MIT |

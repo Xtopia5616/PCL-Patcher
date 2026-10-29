@@ -1,4 +1,4 @@
-﻿namespace PclPatcher.Gui.Net48;
+namespace PclPatcher.Gui.Net48;
 
 public partial class MainWindow : Window
 {
@@ -129,7 +129,7 @@ public partial class MainWindow : Window
         creditsBody.Children.Add(PclUi.LinkLine("PCL 分发有限许可 / 合理使用指南", "https://github.com/Meloong-Git/PCL/blob/main/LICENCE"));
 
         var licenseInfo = PclUi.Label(
-            "本工具代码采用《PCL Patcher 个人学习研究许可证 1.0》：仅限个人学习研究，禁止商业使用与再分发；不授予 PCL、Minecraft 或任何第三方软件的权利。完整条款见项目仓库的 LICENSE 与 DISCLAIMER.md。",
+            "本工具原创代码以 MIT 许可发布：可自由使用、修改与再分发，保留版权与许可声明即可。PclTheme.xaml、PCL 控件与字体不在 MIT 范围内，权利归龙腾猫跃及 PCL 项目；补丁后的 PCL 仍受 PCL 许可约束，请勿分发。完整条款见项目仓库的 LICENSE、NOTICE 与 DISCLAIMER.md。",
             11, PclUi.Muted, null, true);
         licenseInfo.LineHeight = 18;
         licenseInfo.Margin = new Thickness(0, 10, 0, 0);

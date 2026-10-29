@@ -2,7 +2,7 @@
 
 作者：**Xtopia**（开发协助：DeepSeek）
 
-> 许可证：[LICENSE](LICENSE)（仅限个人学习研究，禁止商业使用与再分发） ·
+> 许可证：[LICENSE](LICENSE)（MIT；PCL 派生文件除外） ·
 > 免责声明：[DISCLAIMER.md](DISCLAIMER.md)
 
 目标文件：`D:\Minecraft\Plain Craft Launcher 2.exe`
@@ -446,7 +446,7 @@ Patcher 只改 code-behind 里对 UI 属性的赋值：
 - 补丁强依赖 2.99.0.1 的 IL 形状；PCL 升级后 `--force` 可能写出不可运行的文件，必须先重新分析。
 - `--no-update` 会关闭 PCL 的更新路径，包括手动检查更新；不需要时不要加。
 - 不分发修改版；PCL 作者是按合规要求关闭功能的，第三方“修复版”也有安全风险。
-- 许可与免责：本项目代码仅限个人学习研究（[LICENSE](LICENSE)），完整风险提示见
+- 许可与免责：本项目原创代码以 [MIT](LICENSE) 发布（PCL 派生文件除外），完整风险提示见
   [DISCLAIMER.md](DISCLAIMER.md)；补丁后的 PCL 属于修改版，不得再分发。中国大陆的
   游戏出版/进口/运营政策与 PCL 许可限制见该文第 4 节。
 

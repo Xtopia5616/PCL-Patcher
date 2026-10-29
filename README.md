@@ -6,7 +6,7 @@ Plain Craft Launcher (PCL) 的第三方 IL 补丁工具。仓库只保留两个�
 - **Patcher** — `src/PclPatcher`：.NET 10 命令行工具，用 dnlib 完成实际的补丁。
 
 作者：**Xtopia**（开发协助：DeepSeek）
-许可证：[LICENSE](LICENSE)（仅限个人学习研究） · 免责声明：[DISCLAIMER.md](DISCLAIMER.md) ·
+许可证：[MIT](LICENSE)（原创部分；PCL 派生文件除外） · 免责声明：[DISCLAIMER.md](DISCLAIMER.md) ·
 第三方说明：[NOTICE.md](NOTICE.md)
 
 > 本工具只在本机合法持有的 PCL 副本上做技术验证：默认原地替换并自动生成 `.bak`，
@@ -156,8 +156,12 @@ Missing`，或用 `--force` 强制尝试（可能产出不可运行的文件）�
 
 ## 许可与不分发声明
 
-- 本项目代码采用 [LICENSE](LICENSE)：仅限个人学习研究，禁止商业使用与再分发。
-- 完整风险提示见 [DISCLAIMER.md](DISCLAIMER.md)。
-- PCL 控件、主题、字体与 `PclTheme.xaml` 的权利归龙腾猫跃 / PCL 项目，见
-  [NOTICE.md](NOTICE.md)；第三方许可证全文见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。
-- 发布包**不包含** `Plain Craft Launcher 2.exe`、PCL 的嵌入 DLL 或 PCL 本体。
+- 本项目**原创部分**（`src/`、`build.ps1`、文档、图标）采用 [MIT](LICENSE)：
+  可商用、可修改、可再分发，保留版权声明与许可文本即可。
+- `PclTheme.xaml`、PCL 控件与字体、PCL 本体**不在 MIT 范围内**，权利归
+  龙腾猫跃 / PCL 项目，按 [NOTICE.md](NOTICE.md) 的合理使用安排处理；
+  第三方许可证全文见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。
+- 用本工具修改 PCL 得到的**补丁产物**仍受 PCL 许可约束，**请勿分发**；
+  MIT 只覆盖工具本身，不改变 PCL 的任何权利。
+- 完整风险提示见 [DISCLAIMER.md](DISCLAIMER.md)。发布包**不包含**
+  `Plain Craft Launcher 2.exe`、PCL 的嵌入 DLL 或 PCL 本体。
