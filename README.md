@@ -22,10 +22,24 @@
 > [Issues](https://github.com/Xtopia5616/PCL-Patcher/issues) 联系，说明涉及的内容、
 > 权利依据与联系方式；核实后会在合理时间内删除或调整相关内容。
 
-Plain Craft Launcher (PCL) 的第三方 IL 补丁工具。
+Plain Craft Launcher (PCL) 的第三方 IL 补丁工具：解锁下载与联机入口，不涉及赞助内容。
 
 许可证：[MIT](LICENSE)（原创部分；PCL 派生文件除外） · 免责声明：[DISCLAIMER.md](DISCLAIMER.md) ·
 第三方说明：[NOTICE.md](NOTICE.md)
+
+## 项目定位与范围声明
+
+**本项目只做两件事：解锁 PCL 的下载入口，以及可选的联机入口。**
+
+- **下载**：恢复“原版游戏”、整合包导入、资源详情安装等被移除的下载入口。
+- **联机**：仅在选择“同时解锁联机”时处理，恢复联机页签与设置项；补丁不内置任何节点。
+- **不涉及赞助内容**：本项目**不会**解锁、破解、绕过或伪造任何赞助（捐赠 / 爱发电）
+  相关内容与权益，不提供赞助者身份、赞助码、赞助专属功能或付费能力。PCL 的赞助与
+  作者权益请通过官方渠道支持：<https://meloong.com/afd/a/LTCat>。
+- 本项目与 PCL 作者龙腾猫跃、成都瓜皮龙科技有限公司、网易、Microsoft、Mojang
+  **没有**隶属、合作、赞助或授权关系。
+
+> 只需要下载功能时，请取消勾选“同时解锁联机”；这样补丁不会写入联机相关逻辑。
 
 <p align="center">
   <img src="assets/screenshot/gui.png" width="820" alt="PCL Patcher 主界面：选择 PCL 主程序、校验版本指纹、执行补丁步骤">
@@ -121,6 +135,9 @@ patcher-lab/
 │  │  ├─ Probes.cs                  PatchPlan 能力探测（不改模块）
 │  │  ├─ Patches.Download.cs        下载页与 UI 入口补丁
 │  │  ├─ Patches.Modpack.cs         整合包安装、加载器、自更新
+│  │  ├─ Patches.CurseForge.cs      CurseForge API 镜像
+│  │  ├─ Patches.Link.cs            联机入口、开关与节点检查
+│  │  ├─ Patches.LinkNotice.cs      联机页示例文本替换
 │  │  ├─ FileOperations.cs          备份、还原、原子替换、结束 PCL
 │  │  └─ IlHelpers.cs               IL 校验、指纹与通用工具
 │  └─ PclPatcher.Gui.Net48/         单文件 GUI（net48 WPF）
@@ -194,7 +211,9 @@ GUI：
 2. 如果都没找到，查找窗口会保持打开并持续观察进程：此时启动一次 PCL，就会直接从
    运行中的进程反查它的 exe 路径，无需全盘扫描；
 3. 输出文件默认就是源文件（原地补丁）；
-4. 点“开始补丁”，先结束正在运行的 PCL，再自动备份为 `.bak` 并原子替换；
+4. 在“补丁选项”里选择解锁范围：“同时解锁联机”**默认勾选**（下载 + 联机）；
+   取消勾选则**只解锁下载**。随后点“开始补丁”，先结束正在运行的 PCL，
+   再自动备份为 `.bak` 并原子替换；
 5. 随时用“还原备份”恢复原版。
 
 用过的路径会记在 `%LOCALAPPDATA%\PclPatcher\settings.json`（最多 5 条），下次启动
@@ -216,6 +235,9 @@ GUI 默认以管理员权限启动（`app.manifest` 的 `requireAdministrator`�
 # 另存为副本，源文件不变
 .\dist\PclPatcher.exe "D:\Minecraft\Plain Craft Launcher 2.exe" ".\PCL-patched.exe"
 
+# 只解锁下载，跳过联机相关补丁
+.\dist\PclPatcher.exe "D:\Minecraft\Plain Craft Launcher 2.exe" --download-only
+
 # 只探测，不写文件
 .\dist\PclPatcher.exe "D:\Minecraft\Plain Craft Launcher 2.exe" --dry-run
 
@@ -229,6 +251,7 @@ GUI 默认以管理员权限启动（`app.manifest` 的 `requireAdministrator`�
 | `--restore` | 从 `<源文件>.bak` 还原 |
 | `--force` | 绕过未知哈希 / 指纹校验 |
 | `--allow-partial` | 缺失 required 步骤时继续（仅用于新版本探测） |
+| `--download-only` | 只解锁下载，跳过五个联机补丁步骤 |
 | `--no-update` | 把 `ModSecret.UpdateStart` 改成 `ret`，禁用自更新 |
 | `--no-stop` | 不自动结束正在运行的 PCL |
 | `--fingerprints` | 打印关键方法指纹 |
@@ -243,13 +266,26 @@ GUI 默认以管理员权限启动（`app.manifest` 的 `requireAdministrator`�
 | `ExtraUiEntries` | 恢复更新提示“下载”、Mod 禁用页、启动页空状态、资源详情安装、导入整合包 |
 | `ModpackInstall` | 重建七路 `switch` 与无参入口的文件选择 |
 | `LoaderInit` | 重建真实的 `DlClientListLoader` |
+| `CurseForgeMirror` | CurseForge API 改走内置 MCIMirror 反代，避免官方源连不上时搜索为空 |
+| `RestoreLinkEntry` | 恢复标题栏“联机”页签与设置项（仅联机范围） |
+| `LinkIgnoreDisable` | 忽略官方配置里的 `DisableReason2` / `MinVersionCode`（仅联机范围） |
+| `LinkRequireCustomPeer` | 未填自定义节点时提示并中止（仅联机范围，不内置默认节点） |
+| `LinkPrecheckCustomPeer` | 建房/加入前先检查节点（仅联机范围） |
+| `LinkNoticeText` | 把联机页的示例文本换成节点停服/自建说明（仅联机范围） |
 | `DisableSelfUpdate` | 可选：`--no-update` 时 stub 掉自更新 |
+
+`RestoreLinkEntry` 起五个联机步骤只在勾选“同时解锁联机”时执行；命令行加
+`--download-only` 等价于取消勾选，只应用下载相关步骤。
+
+选择联机范围时也**默认不带节点**：补丁只恢复入口和解除配置拦截，使用前必须在
+**设置 → 联机 → 自定义节点** 里填写一个可用 EasyTier 节点（房主与加入方一致），
+详见 [PCL-PATCHER.md](PCL-PATCHER.md) 的「5.1 联机（无默认节点）」。
 
 每一步都有 `Probe`（不修改模块）、`Apply`、`Verify`；写盘前做全模块 IL 校验，
 写盘后重新加载再校验。已打补丁的文件再次运行会直接返回 `already`。
 
 <p align="center">
-  <img src="assets/screenshot/flow.png" width="420" alt="补丁流程面板：六个步骤依次 Probe / Apply / Verify">
+  <img src="assets/screenshot/flow.png" width="420" alt="补丁流程面板：步骤依次 Probe / Apply / Verify">
 </p>
 <p align="center">
   <sub>补丁流程面板：左侧序号在运行时依次变成状态图标（进行中 / 完成 / 已跳过 / 失败）</sub>

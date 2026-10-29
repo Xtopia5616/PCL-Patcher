@@ -150,11 +150,14 @@ public partial class MainWindow : Window
 
         _dryRunBox = AddOption(optionBody, "只探测", "校验并打印结果，不写出文件", true);
         _noUpdateBox = AddOption(optionBody, "禁用更新", "关闭 PCL 自更新，避免覆盖补丁", true);
+        _linkUnlockBox = AddOption(optionBody, "同时解锁联机", "勾选：下载 + 联机；不勾选：仅解锁下载", true);
+        _linkUnlockBox.Checked = true;
         _stopPclBox = AddOption(optionBody, "自动退出 PCL", "补丁/还原前结束正在运行的 PCL", true);
         _stopPclBox.Checked = true;
         _forceBox = AddOption(optionBody, "允许未知版本", "跳过 SHA-256 与方法指纹校验", false);
         var forceHint = (TextBlock)((Grid)_forceBox.Parent).Children[1];
         _noUpdateBox.Change += (_, isChecked) => _steps?.SetNoUpdate(isChecked);
+        _linkUnlockBox.Change += (_, isChecked) => _steps?.SetLink(isChecked);
         _forceBox.Change += (_, isChecked) =>
         {
             forceHint.Foreground = PclUi.Frozen(isChecked ? PclUi.Amber : PclUi.Muted);
@@ -239,7 +242,7 @@ public partial class MainWindow : Window
         var stepsHead = new Grid { Margin = new Thickness(0, 0, 0, 8) };
         stepsHead.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         stepsHead.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        _stepsCount = PclUi.Label("0/5", 11, PclUi.Muted, FontWeights.SemiBold);
+        _stepsCount = PclUi.Label("0/9", 11, PclUi.Muted, FontWeights.SemiBold);
         Grid.SetColumn(_stepsCount, 1);
         stepsHead.Children.Add(_stepsCount);
         stepsBody.Children.Add(stepsHead);
@@ -249,6 +252,12 @@ public partial class MainWindow : Window
         {
             if (_stepsCount != null) _stepsCount.Text = _steps.Completed + "/" + _steps.ActiveCount;
         };
+        // Mirror the initial checkbox state: DisableSelfUpdate is off by default,
+        // and the link group follows "同时解锁联机" (checked by default).
+        _steps.SetLink(_linkUnlockBox.Checked == true);
+        _steps.SetNoUpdate(_noUpdateBox.Checked == true);
+        _steps.Reset();
+        _stepsCount.Text = "0/" + _steps.ActiveCount;
         stepsBody.Children.Add(_steps);
         _rightStack.Children.Add(_stepsCard);
 

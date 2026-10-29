@@ -54,6 +54,7 @@ public partial class MainWindow : Window
     private PCL.MyComboBox _versionBox;
     private PCL.MyCheckBox _dryRunBox;
     private PCL.MyCheckBox _noUpdateBox;
+    private PCL.MyCheckBox _linkUnlockBox;
     private PCL.MyCheckBox _stopPclBox;
     private PCL.MyCheckBox _forceBox;
     private PCL.MyButton _startButton;

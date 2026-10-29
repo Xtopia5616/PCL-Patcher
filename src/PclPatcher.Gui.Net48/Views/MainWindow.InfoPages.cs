@@ -84,11 +84,18 @@ public partial class MainWindow : Window
         heroBody.Children.Add(badges);
 
         var intro = PclUi.Label(
-            "在本机 PCL 副本上恢复被移除的下载入口。默认直接替换源文件，替换前自动备份为 .bak，可随时还原。",
+            "在本机 PCL 副本上恢复被移除的下载入口；可选择同时恢复联机入口。默认直接替换源文件，替换前自动备份为 .bak，可随时还原。",
             12.5, PclUi.Ink, null, true);
         intro.LineHeight = 21;
         intro.Margin = new Thickness(0, 14, 0, 0);
         heroBody.Children.Add(intro);
+
+        var scope = PclUi.Label(
+            "范围声明：本工具只解锁下载与联机入口，不会解锁、破解或绕过任何赞助（捐赠 / 爱发电）相关内容与权益。",
+            11.5, PclUi.Accent, null, true);
+        scope.LineHeight = 19;
+        scope.Margin = new Thickness(0, 7, 0, 0);
+        heroBody.Children.Add(scope);
 
         var how = PclUi.Card("工作方式", out var howBody, 10);
         left.Children.Add(how);
@@ -121,6 +128,12 @@ public partial class MainWindow : Window
         sponsor.Inlines.Add(new Run("赞助 PCL：") { Foreground = PclUi.InkBrush });
         sponsor.Inlines.Add(PclUi.Link("爱发电", "https://meloong.com/afd/a/LTCat"));
         creditsBody.Children.Add(sponsor);
+        var sponsorNote = PclUi.Label(
+            "请通过官方渠道支持作者；本工具不提供、也不解锁任何赞助者身份或赞助专属内容。",
+            10.5, PclUi.Muted, null, true);
+        sponsorNote.LineHeight = 17;
+        sponsorNote.Margin = new Thickness(0, 3, 0, 0);
+        creditsBody.Children.Add(sponsorNote);
         creditsBody.Children.Add(PclUi.LinkLine("PCL 项目 / 源代码", "https://github.com/Meloong-Git/PCL"));
         creditsBody.Children.Add(PclUi.LinkLine("PCL 分发有限许可 / 合理使用指南", "https://github.com/Meloong-Git/PCL/blob/main/LICENCE"));
 

@@ -1,4 +1,4 @@
-﻿namespace PclPatcher;
+namespace PclPatcher;
 
 internal static partial class Program
 {
@@ -131,6 +131,37 @@ internal static partial class Program
                         throw new InvalidOperationException($"{type.FullName}::{method.Name} has a dangling exception-handler boundary");
                 }
             }
+
+            // A dangling argument index (usually ldarg.0 emitted into a static
+            // method) passes the structural checks above but makes the CLR throw
+            // InvalidProgramException the first time the method is JIT-compiled.
+            var argumentCount = method.MethodSig.Params.Count + (method.HasThis ? 1 : 0);
+            foreach (var i in ins)
+            {
+                var index = i.OpCode.Code switch
+                {
+                    Code.Ldarg_0 => 0,
+                    Code.Ldarg_1 => 1,
+                    Code.Ldarg_2 => 2,
+                    Code.Ldarg_3 => 3,
+                    Code.Ldarg or Code.Ldarg_S or Code.Ldarga or Code.Ldarga_S or Code.Starg or Code.Starg_S
+                        when i.Operand is Parameter parameter => parameter.Index,
+                    _ => -1
+                };
+                if (index >= argumentCount)
+                    throw new InvalidOperationException(
+                        $"{type.FullName}::{method.Name} references argument {index}, but the method only has {argumentCount} slot(s)");
+            }
+        }
+
+        // Never let a host-runtime reference leak into the target image: importing
+        // `typeof(...)` (instead of reusing the module's own member refs) produces
+        // an assembly the .NET Framework loader cannot resolve at JIT time.
+        foreach (var reference in module.GetAssemblyRefs())
+        {
+            if (reference.Name == "System.Private.CoreLib" || reference.Name == "System.Runtime")
+                throw new InvalidOperationException(
+                    $"patch introduced a reference to {reference.Name}, which the .NET Framework target cannot load");
         }
     }
 

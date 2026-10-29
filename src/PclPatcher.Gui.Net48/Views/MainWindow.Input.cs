@@ -393,7 +393,11 @@ public partial class MainWindow : Window
             _lastKnown = _catalog.Matches(hash);
             _lastBackupPath = backup;
             _lastBackupHash = backupHash;
-            _restoreAvailable = File.Exists(backup);
+            // A restore keeps the .bak on disk, so the backup's presence alone
+            // does not mean there is anything left to restore; only offer the
+            // button while the source still differs from that backup.
+            _restoreAvailable = backupHash is not null &&
+                                !string.Equals(hash, backupHash, StringComparison.OrdinalIgnoreCase);
             _lastBackupKnown = _catalog.Matches(backupHash);
 
             var shortHash = hash.Length >= 16 ? hash.Substring(0, 16) : hash;
@@ -402,7 +406,9 @@ public partial class MainWindow : Window
             if (_restoreAvailable)
                 _sourceMeta.ToolTip += Environment.NewLine + "备份: " + backup;
             RefreshHashBadge();
-            SetBackupHint(_restoreAvailable);
+            // The .bak may still exist after a restore even though the button is
+            // disabled; the hint describes the backup, not whether restore applies.
+            SetBackupHint(File.Exists(backup));
             RefreshBackupState();
             RefreshLaunchReadiness();
         }

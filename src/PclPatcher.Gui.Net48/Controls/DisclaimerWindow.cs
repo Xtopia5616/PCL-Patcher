@@ -15,7 +15,7 @@ internal sealed class DisclaimerWindow : Window
     /// Revision of the copy below. Acceptance is stored per revision, so bump
     /// this string whenever the notice changes in a way users should re-read.
     /// </summary>
-    public const string Version = "2026-10-29";
+    public const string Version = "2026-10-29-2";
 
     private const string FullTextUrl =
         "https://github.com/Xtopia5616/PCL-Patcher/blob/main/DISCLAIMER.md";
@@ -32,6 +32,11 @@ internal sealed class DisclaimerWindow : Window
         {
             Title = "第三方非官方工具",
             Body = "与 PCL 作者龙腾猫跃、成都瓜皮龙科技有限公司、网易、Microsoft、Mojang 均无隶属、合作、赞助或授权关系。"
+        },
+        new Point
+        {
+            Title = "只解锁下载与联机",
+            Body = "本工具只恢复下载与联机入口，不会解锁、破解或绕过任何赞助（捐赠 / 爱发电）相关内容与权益；请通过官方渠道支持 PCL 作者。"
         },
         new Point
         {

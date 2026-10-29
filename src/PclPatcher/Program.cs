@@ -41,6 +41,7 @@ internal static partial class Program
         var dryRun = args.Contains("--dry-run");
         var force = args.Contains("--force");
         var noUpdate = args.Contains("--no-update");
+        var downloadOnly = args.Contains("--download-only");
         var allowPartial = args.Contains("--allow-partial");
         var printFingerprints = args.Contains("--fingerprints");
         var restore = args.Contains("--restore");
@@ -62,9 +63,10 @@ internal static partial class Program
         var sourceIsKnownOriginal = profile is not null &&
                                     string.Equals(profile.Sha256, sourceHash, StringComparison.OrdinalIgnoreCase);
 
-        var plan = BuildPlan(noUpdate);
+        var plan = BuildPlan(noUpdate, includeLink: !downloadOnly);
         Console.WriteLine($"source : {source}");
         Console.WriteLine($"mode   : {(inPlace ? "in-place, source will be replaced" : "separate output file")}");
+        Console.WriteLine($"scope  : {(downloadOnly ? "download only" : "download + link")}");
         Console.WriteLine($"output : {output}");
         if (inPlace) Console.WriteLine($"backup : {backup}");
         Console.WriteLine($"sha256 : {sourceHash}");
@@ -123,7 +125,18 @@ internal static partial class Program
                 Console.WriteLine($"patch  : {step.Name,-28} {changes}");
             }
 
-            ValidateIl(module);
+            try
+            {
+                ValidateIl(module);
+            }
+            catch (InvalidOperationException ex) when (applied.Count == 0)
+            {
+                // Nothing was applied: the source is an older patch product.
+                // Point at restore instead of leaking a raw IL message.
+                throw new InvalidOperationException(
+                    ex.Message + Environment.NewLine +
+                    "  源文件是旧版补丁产物，先还原再重打：--restore（GUI：还原备份 → 开始补丁）", ex);
+            }
             Console.WriteLine("verify : IL structure OK");
 
             if (dryRun)
@@ -196,13 +209,16 @@ internal static partial class Program
         var source = args.FirstOrDefault(a => !a.StartsWith("--", StringComparison.Ordinal));
         if (source is null)
             throw new InvalidOperationException(
-                "usage: PclPatcher <PCL.exe> [output.exe] [--restore] [--dry-run] [--force] [--allow-partial] [--no-update] [--no-stop] [--fingerprints] [--profiles]");
+                "usage: PclPatcher <PCL.exe> [output.exe] [--restore] [--dry-run] [--force] [--allow-partial] [--download-only] [--no-update] [--no-stop] [--fingerprints] [--profiles]");
         return Path.GetFullPath(source);
     }
 
     private static string GetBackupPath(string source) => source + BackupSuffix;
 
-    private static List<PatchStep> BuildPlan(bool noUpdate)
+    // Link steps are opt-in at the call site: --download-only leaves them out so
+    // a user who only wants the download entry never touches PageLinkMain.
+    // DisableSelfUpdate stays orthogonal and is appended last, as before.
+    private static List<PatchStep> BuildPlan(bool noUpdate, bool includeLink)
     {
         var plan = new List<PatchStep>
         {
@@ -210,8 +226,18 @@ internal static partial class Program
             new("ModifyCard", true, ProbeModifyCard, PatchModifyCard, VerifyModifyCard),
             new("ExtraUiEntries", false, ProbeExtraUiEntries, PatchExtraUiEntries, VerifyExtraUiEntries),
             new("ModpackInstall", false, ProbeModpackInstall, PatchModpackInstall, VerifyModpackInstall),
-            new("LoaderInit", true, ProbeLoaderInit, PatchLoaderInit, VerifyLoaderInit)
+            new("LoaderInit", true, ProbeLoaderInit, PatchLoaderInit, VerifyLoaderInit),
+            new("CurseForgeMirror", false, ProbeCurseForgeMirror, PatchCurseForgeMirror, VerifyCurseForgeMirror)
         };
+
+        if (includeLink)
+        {
+            plan.Add(new("RestoreLinkEntry", true, ProbeRestoreLinkEntry, PatchRestoreLinkEntry, VerifyRestoreLinkEntry));
+            plan.Add(new("LinkIgnoreDisable", true, ProbeLinkIgnoreDisable, PatchLinkIgnoreDisable, VerifyLinkIgnoreDisable));
+            plan.Add(new("LinkRequireCustomPeer", true, ProbeLinkRequireCustomPeer, PatchLinkRequireCustomPeer, VerifyLinkRequireCustomPeer));
+            plan.Add(new("LinkPrecheckCustomPeer", true, ProbeLinkPrecheckCustomPeer, PatchLinkPrecheckCustomPeer, VerifyLinkPrecheckCustomPeer));
+            plan.Add(new("LinkNoticeText", true, ProbeLinkNoticeText, PatchLinkNoticeText, VerifyLinkNoticeText));
+        }
 
         if (noUpdate)
             plan.Add(new("DisableSelfUpdate", true, ProbeDisableSelfUpdate, PatchDisableSelfUpdate, VerifyDisableSelfUpdate));

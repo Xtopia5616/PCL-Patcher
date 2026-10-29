@@ -100,12 +100,13 @@ public partial class MainWindow : Window
         if (inPlace && _dryRunBox.Checked != true)
         {
             var alreadyPatched = hasOriginalBackup;
+            var scope = _linkUnlockBox.Checked == true ? "下载 + 联机" : "仅解锁下载";
             var backupText = File.Exists(backup)
                 ? "已有备份：\n" + backup + "\n（继续使用该备份，不会覆盖）"
                 : "将自动备份为：\n" + backup;
             var message = alreadyPatched
                 ? "源文件已经是补丁状态，继续只会重新校验，不会重复写入。\n\n" + backupText
-                : "补丁会直接替换源文件：\n" + fullSource + "\n\n" + backupText +
+                : "补丁会直接替换源文件：\n" + fullSource + "\n\n补丁范围：" + scope + "\n\n" + backupText +
                   "\n\n补丁后可用“还原备份”恢复原版。";
             var confirm = PclDialog.Show(this,
                 alreadyPatched ? "已是补丁状态" : "替换源文件",
@@ -136,11 +137,12 @@ public partial class MainWindow : Window
         var args = new List<string> { fullSource };
         if (!inPlace) args.Add(fullOutput);
         if (_noUpdateBox.Checked == true) args.Add("--no-update");
+        if (_linkUnlockBox.Checked != true) args.Add("--download-only");
         if (_stopPclBox.Checked != true) args.Add("--no-stop");
         if (_forceBox.Checked == true) args.Add("--force");
         if (_dryRunBox.Checked == true) args.Add("--dry-run");
 
-        await RunPatcherAsync(args);
+        await RunPatcherAsync(args, inPlace ? fullSource : fullOutput);
     }
 
     private async void RestoreBackup_Click()
@@ -209,12 +211,15 @@ public partial class MainWindow : Window
 
         var restoreArgs = new List<string> { fullSource, "--restore" };
         if (_stopPclBox.Checked != true) restoreArgs.Add("--no-stop");
-        await RunPatcherAsync(restoreArgs, restore: true);
+        await RunPatcherAsync(restoreArgs, fullSource, restore: true);
     }
 
-    private async Task RunPatcherAsync(List<string> args, bool restore = false)
+    // target is passed explicitly: args also carry flags (--restore/--dry-run/
+    // --no-stop/...), so args[1] is not necessarily an output path. Treating
+    // "--restore" as the output made the post-restore refresh check a file
+    // named "--restore" and report "文件不存在" right after a successful restore.
+    private async Task RunPatcherAsync(List<string> args, string target, bool restore = false)
     {
-        var target = args.Count > 1 ? args[1] : args[0];
         _noOp = false;
         _writeDenied = false;
         SetBusy(true);
@@ -223,6 +228,7 @@ public partial class MainWindow : Window
         _log.SetState(LogState.Running);
         if (!restore)
         {
+            _steps.SetLink(_linkUnlockBox.Checked == true);
             _steps.SetNoUpdate(_noUpdateBox.Checked == true);
             _steps.Reset();
             _steps.ActivateFirst();
@@ -432,6 +438,7 @@ public partial class MainWindow : Window
         _outputBox.IsEnabled = !busy;
         _dryRunBox.IsEnabled = !busy;
         _noUpdateBox.IsEnabled = !busy;
+        _linkUnlockBox.IsEnabled = !busy;
         _stopPclBox.IsEnabled = !busy;
         _forceBox.IsEnabled = !busy;
         _startButton.IsEnabled = !busy;

@@ -1,4 +1,4 @@
-﻿namespace PclPatcher.Gui.Net48;
+namespace PclPatcher.Gui.Net48;
 
 internal enum StepState
 {
@@ -32,8 +32,18 @@ internal sealed class StepRow
 /// </summary>
 internal sealed class StepPanel : StackPanel
 {
+    private static readonly string[] LinkKeys =
+    {
+        "RestoreLinkEntry",
+        "LinkIgnoreDisable",
+        "LinkRequireCustomPeer",
+        "LinkPrecheckCustomPeer",
+        "LinkNoticeText"
+    };
+
     private readonly List<StepRow> _rows = new List<StepRow>();
     private bool _noUpdate;
+    private bool _link = true;
 
     public event Action Updated;
 
@@ -45,6 +55,12 @@ internal sealed class StepPanel : StackPanel
         Add("ExtraUiEntries", "扩展 UI 入口", "更新提示 / Mod / 导入");
         Add("ModpackInstall", "重建整合包安装", "七路 switch + 文件选择");
         Add("LoaderInit", "恢复加载器", "DlClientListLoader");
+        Add("CurseForgeMirror", "CurseForge 镜像", "API 走 mcimirror");
+        Add("RestoreLinkEntry", "恢复联机入口", "联机页签 / 设置项");
+        Add("LinkIgnoreDisable", "解除联机开关", "DisableReason2");
+        Add("LinkRequireCustomPeer", "强制填写节点", "无默认节点");
+        Add("LinkPrecheckCustomPeer", "建房前检查节点", "创建 / 加入入口");
+        Add("LinkNoticeText", "替换联机提示", "示例文本 → 节点说明");
         Add("DisableSelfUpdate", "禁用自更新", "ModSecret.UpdateStart");
     }
 
@@ -79,11 +95,28 @@ internal sealed class StepPanel : StackPanel
         Updated?.Invoke();
     }
 
+    /// <summary>
+    /// Mirrors the "同时解锁联机" checkbox: unchecked hides the five link rows
+    /// from the run, so the patcher is invoked with --download-only.
+    /// </summary>
+    public void SetLink(bool enabled)
+    {
+        _link = enabled;
+        foreach (var row in _rows)
+        {
+            if (!IsLink(row.Key)) continue;
+            if (enabled && row.State == StepState.Disabled) Set(row, StepState.Pending, false);
+            else if (!enabled && row.State != StepState.Active) Set(row, StepState.Disabled, false);
+        }
+        Updated?.Invoke();
+    }
+
     public void Reset()
     {
         foreach (var row in _rows)
         {
-            var disabled = row.Key == "DisableSelfUpdate" && !_noUpdate;
+            var disabled = (!_link && IsLink(row.Key)) ||
+                           (row.Key == "DisableSelfUpdate" && !_noUpdate);
             Set(row, disabled ? StepState.Disabled : StepState.Pending, false);
         }
         Updated?.Invoke();
@@ -194,6 +227,8 @@ internal sealed class StepPanel : StackPanel
             return;
         }
     }
+
+    private static bool IsLink(string key) => Array.IndexOf(LinkKeys, key) >= 0;
 
     private void Add(string key, string name, string note)
     {
