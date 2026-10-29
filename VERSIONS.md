@@ -169,4 +169,10 @@ $py = 'C:\Users\olive\.dsh\dsh-runtimes\dsh-primary-runtime\dependencies\python\
 
 # 核对指纹与补丁探测
 .\dist\PclPatcher.exe .\.versions\2.99.0.0\'Plain Craft Launcher 2.exe' --dry-run --force --fingerprints
+
+# 快照版：确认渠道与匹配方式（exact / structural）
+.\dist\PclPatcher.exe "C:\Users\olive\Downloads\Mobile Devices\Plain Craft Launcher 2.exe" --identify
+
+# 未来版本：打印 profile 条目，并写入外部 profile 文件（GUI 也会跟随）
+.\dist\PclPatcher.exe "新的 PCL.exe" --adopt --save
 ```
