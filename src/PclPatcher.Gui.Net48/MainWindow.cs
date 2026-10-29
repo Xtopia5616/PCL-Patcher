@@ -122,6 +122,7 @@ public partial class MainWindow : Window
     private bool _writeDenied;
     private bool _openReady;
     private bool _launchReady;
+    private string _patchedOutputPath;
     private Process _runningProcess;
     private string _patcherPath;
     private readonly List<string> _patcherPrefix = new List<string>();

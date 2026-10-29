@@ -109,6 +109,10 @@ public partial class MainWindow : Window
             // Keep the user's text; the validation below will mark it invalid.
         }
 
+        // Selecting a different file invalidates the "patched this session"
+        // marker; detection below re-enables launch if that file is patched.
+        if (!SamePath(path, _lastHashPath)) _patchedOutputPath = null;
+
         _suppressText = true;
         _sourceBox.Text = path;
         _suppressText = false;
@@ -293,6 +297,9 @@ public partial class MainWindow : Window
     {
         if (_suppressText || _busy) return;
         _detectNote = null;
+        // A hand-edited source path no longer refers to whatever was patched
+        // earlier in this session.
+        _patchedOutputPath = null;
         var path = _sourceBox.Text?.Trim().Trim('"') ?? string.Empty;
         _sourceBox.ToolTip = path.Length == 0 ? null : path;
         ShowPathTail(_sourceBox);
@@ -305,6 +312,7 @@ public partial class MainWindow : Window
             _restoreAvailable = false;
             SetBackupHint(false);
             RefreshBackupState();
+            RefreshLaunchReadiness();
             SetSourceStrip("未选择 PCL 主程序", "待选择", PclUi.Muted,
                 Color.FromRgb(0xF3, 0xF6, 0xFA), Color.FromRgb(0xEC, 0xEF, 0xF4), PclUi.Muted);
             return;
@@ -318,6 +326,7 @@ public partial class MainWindow : Window
             _restoreAvailable = false;
             SetBackupHint(false);
             RefreshBackupState();
+            RefreshLaunchReadiness();
             SetSourceStrip("文件不存在，请重新选择", "文件不存在", PclUi.Red,
                 Color.FromRgb(0xFD, 0xEC, 0xEC), Color.FromRgb(0xFA, 0xD7, 0xD7), PclUi.Red);
             return;
@@ -347,6 +356,7 @@ public partial class MainWindow : Window
             if (!File.Exists(path))
             {
                 ResetBackupState();
+                RefreshLaunchReadiness();
                 SetSourceStrip("文件不存在，请重新选择", "文件不存在", PclUi.Red,
                     Color.FromRgb(0xFD, 0xEC, 0xEC), Color.FromRgb(0xFA, 0xD7, 0xD7), PclUi.Red);
                 return;
@@ -394,6 +404,7 @@ public partial class MainWindow : Window
             RefreshHashBadge();
             SetBackupHint(_restoreAvailable);
             RefreshBackupState();
+            RefreshLaunchReadiness();
         }
         catch (Exception ex)
         {
@@ -401,6 +412,7 @@ public partial class MainWindow : Window
             _lastHash = null;
             _lastKnown = false;
             ResetBackupState();
+            RefreshLaunchReadiness();
             SetSourceStrip("读取失败：" + ex.Message, "读取失败", PclUi.Red,
                 Color.FromRgb(0xFD, 0xEC, 0xEC), Color.FromRgb(0xFA, 0xD7, 0xD7), PclUi.Red);
         }
@@ -493,6 +505,48 @@ public partial class MainWindow : Window
         var enabled = _restoreAvailable && !_busy;
         _restoreButton.Opacity = enabled ? 1.0 : 0.45;
         _restoreButton.IsHitTestVisible = enabled;
+    }
+
+    /// <summary>
+    /// "启动补丁版" is valid whenever the output file already carries the patch:
+    /// either we wrote it in this session, or a previous run left a patched exe
+    /// next to a backup of a supported original (the "已打补丁" detection).
+    /// Without this, reopening the GUI on an already patched PCL kept the button
+    /// disabled even though there was nothing left to patch.
+    /// </summary>
+    private void RefreshLaunchReadiness()
+    {
+        if (_launchButton is null) return;
+
+        var output = _outputBox?.Text?.Trim().Trim('"') ?? string.Empty;
+        var source = _sourceBox?.Text?.Trim().Trim('"') ?? string.Empty;
+
+        var patchedThisSession = !string.IsNullOrEmpty(_patchedOutputPath) &&
+                                 SamePath(output, _patchedOutputPath);
+        var detectedPatched = _catalog.IsLoaded && _lastBackupKnown && !_lastKnown &&
+                              SamePath(source, _lastHashPath) && SamePath(output, source);
+
+        var ready = File.Exists(output) && (patchedThisSession || detectedPatched);
+
+        _launchReady = ready;
+        if (ready) _openReady = true;
+        UpdateActionButtons();
+    }
+
+    private static bool SamePath(string left, string right)
+    {
+        if (string.IsNullOrWhiteSpace(left) || string.IsNullOrWhiteSpace(right)) return false;
+        left = left.Trim().Trim('"');
+        right = right.Trim().Trim('"');
+        try
+        {
+            return string.Equals(IOPath.GetFullPath(left), IOPath.GetFullPath(right),
+                StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     private void SetSourceStrip(string meta, string badge, Color foreground, Color background, Color badgeBackground, Color badgeForeground)

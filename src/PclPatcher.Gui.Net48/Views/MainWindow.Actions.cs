@@ -272,6 +272,7 @@ public partial class MainWindow : Window
                     SetStatus("还原完成", StatusTone.Ok);
                     _openReady = true;
                     _launchReady = false;
+                    _patchedOutputPath = null;
                     UpdateActionButtons();
                     ShowResult(ResultTone.Success,
                         "已还原原始文件 · " + IOPath.GetFileName(target), false, true);
@@ -288,6 +289,7 @@ public partial class MainWindow : Window
                     SetStatus("已是补丁状态", StatusTone.Ok);
                     _openReady = true;
                     _launchReady = true;
+                    _patchedOutputPath = target;
                     UpdateActionButtons();
                     ShowResult(ResultTone.Info, "源文件已经是补丁状态，未重复写入。", false, true);
                     await UpdateSourceInfoAsync(args[0]);
@@ -298,6 +300,7 @@ public partial class MainWindow : Window
                     SetStatus("补丁完成", StatusTone.Ok);
                     _openReady = true;
                     _launchReady = true;
+                    _patchedOutputPath = target;
                     UpdateActionButtons();
                     var backupNote = File.Exists(BackupPath(target)) ? " · 已备份 .bak" : string.Empty;
                     ShowResult(ResultTone.Success,

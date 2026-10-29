@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace PclPatcher.Gui.Net48;
 
 public partial class App : Application
@@ -36,6 +38,12 @@ public partial class App : Application
         // OneDrive/network-mapped folder; the user explicitly picked this file.
         _pcl = Assembly.UnsafeLoadFrom(loadPath);
 
+        // PCL 控件在状态变化后通过 ModAnimation 过渡颜色 / 缩放，而那个动画线程
+        // 只在 PCL 主程序里启动。宿主里没有它，勾选、启用、悬停只会改逻辑值，
+        // 界面不会重绘（复选框打不上勾、按钮不变色）。把控件切到无动画分支，
+        // 状态变化就会直接落到属性上。
+        InitializePclControls();
+
         // PCL 的界面字体 PCL English 内嵌在 PCL 本体的资源里。这里从用户本机的 PCL 中
         // 提取到本地缓存再加载，不随发布包分发字体文件。
         Resources["PclFontFamily"] = LoadPclFont(_pcl);
@@ -57,6 +65,21 @@ public partial class App : Application
         var window = new MainWindow(pclPath);
         MainWindow = window;
         window.Show();
+    }
+
+    /// <summary>
+    /// Must stay in its own non-inlined method: <see cref="OnStartup"/> is JIT
+    /// compiled before the AssemblyResolve hook is installed and before the
+    /// user's PCL assembly is loaded, so referencing PCL types there would make
+    /// type resolution fail at startup.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void InitializePclControls()
+    {
+        // PCL controls animate state changes (checkbox tick, button colour)
+        // through ModAnimation, whose timer only runs inside the PCL host.
+        // Use their non-animated branch so state changes repaint immediately.
+        PCL.ModAnimation.AniControlEnabled = 1;
     }
 
     private static Stream OpenTheme()

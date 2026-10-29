@@ -123,6 +123,7 @@ public partial class MainWindow : Window
             FontSize = 14,
             HintText = "默认直接替换源文件，也可以另存为其他 exe"
         };
+        _outputBox.TextChanged += (_, _) => RefreshLaunchReadiness();
         outputRow.Children.Add(_outputBox);
         var saveAs = PclUi.Button("另存为", BrowseOutput, 34);
         saveAs.Padding = new Thickness(12, 0, 12, 0);

@@ -81,7 +81,9 @@ internal sealed class DisclaimerWindow : Window
         ShowInTaskbar = false;
         Background = Brushes.White;
         FontFamily = PclUi.Font;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        // CenterScreen, not CenterOwner: the main window can itself sit partly
+        // outside a high-DPI work area, which would push the notice off-screen.
+        WindowStartupLocation = WindowStartupLocation.CenterScreen;
         WindowChrome.SetWindowChrome(this, new WindowChrome
         {
             CaptionHeight = 0,
@@ -119,7 +121,81 @@ internal sealed class DisclaimerWindow : Window
             if (_readOnly) _accept?.Focus();
             else _agree?.Focus();
         };
+
+        // SizeToContent has settled by now, so the final bounds are known.
+        ContentRendered += (_, _) => ClampToWorkArea();
     }
+
+    /// <summary>
+    /// Pulls the window into the monitor's work area using physical pixels.
+    /// WPF's SystemParameters.WorkArea and the window's own DIP bounds disagree
+    /// on high-DPI screens, which can leave the consent buttons below the
+    /// taskbar; Win32 has no such ambiguity.
+    /// </summary>
+    private void ClampToWorkArea()
+    {
+        try
+        {
+            var handle = new WindowInteropHelper(this).Handle;
+            if (handle == IntPtr.Zero) return;
+
+            var monitor = MonitorFromWindow(handle, MonitorDefaultToNearest);
+            var info = new MonitorInfo { Size = Marshal.SizeOf(typeof(MonitorInfo)) };
+            if (monitor == IntPtr.Zero || !GetMonitorInfo(monitor, ref info)) return;
+            if (!GetWindowRect(handle, out var rect)) return;
+
+            var width = rect.Right - rect.Left;
+            var height = rect.Bottom - rect.Top;
+            if (width <= 0 || height <= 0) return;
+
+            var left = Math.Max(info.Work.Left, Math.Min(rect.Left, info.Work.Right - width));
+            var top = Math.Max(info.Work.Top, Math.Min(rect.Top, info.Work.Bottom - height));
+            if (left == rect.Left && top == rect.Top) return;
+
+            SetWindowPos(handle, IntPtr.Zero, left, top, 0, 0,
+                SwpNoSize | SwpNoZOrder | SwpNoActivate);
+        }
+        catch
+        {
+            // A failed clamp only affects placement; the notice still works.
+        }
+    }
+
+    private const uint MonitorDefaultToNearest = 2;
+    private const uint SwpNoSize = 0x0001;
+    private const uint SwpNoZOrder = 0x0004;
+    private const uint SwpNoActivate = 0x0010;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeRect
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MonitorInfo
+    {
+        public int Size;
+        public NativeRect Monitor;
+        public NativeRect Work;
+        public uint Flags;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromWindow(IntPtr handle, uint flags);
+
+    [DllImport("user32.dll", CharSet = CharSet.Auto)]
+    private static extern bool GetMonitorInfo(IntPtr monitor, ref MonitorInfo info);
+
+    [DllImport("user32.dll")]
+    private static extern bool GetWindowRect(IntPtr handle, out NativeRect rect);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetWindowPos(IntPtr handle, IntPtr insertAfter,
+        int x, int y, int width, int height, uint flags);
 
     private UIElement BuildShell()
     {
@@ -276,6 +352,26 @@ internal sealed class DisclaimerWindow : Window
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
+        // The badge needs its own centered layout: a Border stretches a TextBlock
+        // child horizontally, which left-aligns the digit and makes the circle
+        // look off-centre. PCL English also has eccentric digit bearings, so the
+        // tiny number uses a system face with predictable metrics.
+        var numberLabel = new TextBlock
+        {
+            Text = number.ToString(CultureInfo.InvariantCulture),
+            FontFamily = new FontFamily("Segoe UI"),
+            FontSize = 11,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = PclUi.Frozen(PclUi.Accent),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextAlignment = TextAlignment.Center,
+            TextTrimming = TextTrimming.None,
+            TextWrapping = TextWrapping.NoWrap,
+            Padding = new Thickness(0),
+            // Digits sit a hair below the line-box centre; nudge the glyph up.
+            Margin = new Thickness(0, -1, 0, 0)
+        };
         var badge = new Border
         {
             Width = 22,
@@ -284,7 +380,7 @@ internal sealed class DisclaimerWindow : Window
             Background = PclUi.Frozen(Color.FromRgb(0xEA, 0xF2, 0xFE)),
             VerticalAlignment = VerticalAlignment.Top,
             Margin = new Thickness(0, 1, 0, 0),
-            Child = PclUi.Label(number.ToString(CultureInfo.InvariantCulture), 11, PclUi.Accent, FontWeights.SemiBold)
+            Child = numberLabel
         };
         row.Children.Add(badge);
 

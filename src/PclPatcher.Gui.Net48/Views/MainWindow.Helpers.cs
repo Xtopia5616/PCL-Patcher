@@ -155,6 +155,7 @@ public partial class MainWindow : Window
             _lastBackupKnown = catalog.Matches(_lastBackupHash);
             RefreshHashBadge();
             SetBackupHint(_restoreAvailable);
+            RefreshLaunchReadiness();
         }
     }
 
