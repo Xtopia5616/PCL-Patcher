@@ -108,6 +108,19 @@ public partial class MainWindow : Window
         howBody.Children.Add(FeatureRow("M2.5,8 L6,11.5 L13.5,4",
             "每一步都可复核", "Probe / Apply / Verify，全模块 IL 校验后再写盘。"));
 
+        // Verified builds: the hashes this project already patched and launched.
+        // Others can compare their file's hash here instead of trying blind.
+        var verified = PclUi.Card("已验证构建", out var verifiedBody, 10);
+        left.Children.Add(verified);
+        _verifiedList = new StackPanel();
+        verifiedBody.Children.Add(_verifiedList);
+        var verifiedNote = PclUi.Label(
+            "✓ 表示本机实机验证过（补丁 + 启动检查），哈希一致即可直接补丁；待验证条目由 --adopt 收录，补丁时仍会逐项 Probe。",
+            10.5, PclUi.Muted, null, true);
+        verifiedNote.LineHeight = 16;
+        verifiedNote.Margin = new Thickness(0, 6, 0, 0);
+        verifiedBody.Children.Add(verifiedNote);
+
         var credits = PclUi.Card("署名与许可", out var creditsBody, 10);
         right.Children.Add(credits);
 
@@ -181,7 +194,56 @@ public partial class MainWindow : Window
         legalBody.Children.Add(reopen);
 
         scroll.Content = root;
+        RefreshVerifiedBuilds();
         return scroll;
+    }
+
+    /// <summary>
+    /// Renders the supported build list with its verification state. This is the
+    /// public "these hashes are known good" table: a matching SHA-256 means the
+    /// build was already patched and launched here, so nobody has to try blind.
+    /// </summary>
+    private void RefreshVerifiedBuilds()
+    {
+        if (_verifiedList is null) return;
+        _verifiedList.Children.Clear();
+
+        if (!_catalog.IsLoaded)
+        {
+            _verifiedList.Children.Add(PclUi.Label("正在读取版本列表…", 11, PclUi.Muted));
+            return;
+        }
+
+        foreach (var profile in _catalog.Profiles)
+        {
+            var row = new Grid { Margin = new Thickness(0, 2, 0, 2) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(15) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var mark = new TextBlock
+            {
+                Text = profile.Verified ? "\uE73E" : "\uE9CE",
+                FontFamily = PclUi.Icons,
+                FontSize = 10.5,
+                Foreground = PclUi.Frozen(profile.Verified ? PclUi.Green : PclUi.Amber),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            row.Children.Add(mark);
+
+            var name = PclUi.Label(profile.Label + (profile.Verified ? string.Empty : "（待验证）"), 11.5,
+                profile.Verified ? PclUi.Ink : PclUi.Muted, FontWeights.SemiBold);
+            Grid.SetColumn(name, 1);
+            row.Children.Add(name);
+
+            var hash = PclUi.Label(profile.ShortHash + "…", 10, PclUi.Muted);
+            hash.FontFamily = PclUi.Mono;
+            hash.VerticalAlignment = VerticalAlignment.Center;
+            Grid.SetColumn(hash, 2);
+            row.Children.Add(hash);
+
+            _verifiedList.Children.Add(row);
+        }
     }
 
     private Grid FeatureRow(string iconData, string title, string description)

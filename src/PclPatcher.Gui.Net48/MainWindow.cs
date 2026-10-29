@@ -80,6 +80,7 @@ public partial class MainWindow : Window
     private StepPanel _steps;
     private TextBlock _stepsCount;
     private TextBlock _patcherValue;
+    private StackPanel _verifiedList;
     private PCL.MyCard _stepsCard;
     private PCL.MyCard _envCard;
     private StackPanel _leftStack;

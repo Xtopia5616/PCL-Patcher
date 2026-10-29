@@ -22,13 +22,17 @@ internal static partial class Program
     /// One shipped PCL build. <paramref name="Channel"/> distinguishes the
     /// official release line from the snapshot (快照版) line: both carry the same
     /// numeric version, so the channel has to be part of a build's identity.
+    /// <paramref name="Verified"/> marks the builds this project actually patched
+    /// and launched; adopted (--adopt) entries stay false until someone confirms
+    /// them, so "已收录" is never mistaken for "已验证".
     /// </summary>
     private sealed record PclProfile(
         string Version,
         string Sha256,
         IReadOnlyDictionary<string, string> Fingerprints,
         string Channel = "release",
-        string Built = "")
+        string Built = "",
+        bool Verified = true)
     {
         public string Label => Channel == "release" ? Version : $"{Version} {ChannelLabel(Channel)}";
     }
@@ -172,7 +176,8 @@ internal static partial class Program
 
             yield return new PclProfile(version, sha, fingerprints,
                 fields[3].Trim().Length == 0 ? "release" : fields[3].Trim(),
-                fields[4].Trim());
+                fields[4].Trim(),
+                Verified: false);
         }
     }
 

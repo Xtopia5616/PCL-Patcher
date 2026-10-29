@@ -205,16 +205,18 @@ internal static partial class Program
     }
 
     /// <summary>
-    /// Tab separated profile list consumed by the GUIs. Header/tag lines keep the
-    /// format self-describing, and extra fields/lines can be added without
-    /// breaking the parser in PclVersionCatalog.
+    /// Tab separated profile list consumed by the GUIs. The number after the
+    /// "profiles" tag is the format version (3 = added channel/label/verified/built),
+    /// not the build count. Header/tag lines keep the format self-describing, and
+    /// extra fields/lines can be added without breaking the parser in PclVersionCatalog.
     /// </summary>
     private static void PrintProfiles()
     {
-        Console.WriteLine("profiles\t2");
+        Console.WriteLine("profiles\t3");
         foreach (var profile in Profiles)
             Console.WriteLine(
-                $"profile\t{profile.Version}\t{profile.Sha256}\t{profile.Fingerprints.Count}\t{profile.Channel}\t{profile.Label}");
+                $"profile\t{profile.Version}\t{profile.Sha256}\t{profile.Fingerprints.Count}\t{profile.Channel}\t{profile.Label}\t" +
+                $"{(profile.Verified ? 1 : 0)}\t{profile.Built}");
         Console.WriteLine($"support\t{SupportedRange}");
     }
 

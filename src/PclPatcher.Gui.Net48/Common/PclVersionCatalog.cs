@@ -8,13 +8,16 @@ namespace PclPatcher.Gui.Net48;
 /// </summary>
 internal sealed class PclBuildProfile
 {
-    public PclBuildProfile(string version, string sha256, int fingerprintCount, string channel, string label)
+    public PclBuildProfile(string version, string sha256, int fingerprintCount, string channel, string label,
+        bool verified, string built)
     {
         Version = version;
         Sha256 = sha256;
         FingerprintCount = fingerprintCount;
         Channel = channel;
         Label = string.IsNullOrEmpty(label) ? version : label;
+        Verified = verified;
+        Built = built;
     }
 
     public string Version { get; }
@@ -28,6 +31,14 @@ internal sealed class PclBuildProfile
 
     /// <summary>Display name, e.g. "2.99.0.0 快照版".</summary>
     public string Label { get; }
+
+    /// <summary>True when this project patched and launched the build itself.</summary>
+    public bool Verified { get; }
+
+    public string Built { get; }
+
+    /// <summary>First 12 hex chars, for compact UI rows.</summary>
+    public string ShortHash => Sha256.Length >= 12 ? Sha256.Substring(0, 12) : Sha256;
 }
 
 /// <summary>
@@ -123,7 +134,9 @@ internal sealed class PclVersionCatalog
                 out var fingerprints);
             var channel = fields.Length > 4 ? fields[4].Trim() : "release";
             var label = fields.Length > 5 ? fields[5].Trim() : version;
-            profiles.Add(new PclBuildProfile(version, sha256, fingerprints, channel, label));
+            var verified = fields.Length > 6 && fields[6].Trim() == "1";
+            var built = fields.Length > 7 ? fields[7].Trim() : string.Empty;
+            profiles.Add(new PclBuildProfile(version, sha256, fingerprints, channel, label, verified, built));
         }
 
         profiles.Sort((a, b) => CompareVersions(a, b));

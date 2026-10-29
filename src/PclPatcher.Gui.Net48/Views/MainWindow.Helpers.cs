@@ -182,6 +182,7 @@ public partial class MainWindow : Window
         }
         if (_versionPillLabel is not null)
             _versionPillLabel.Text = catalog.SupportLabel;
+        RefreshVerifiedBuilds();
 
         if (_lastHash is not null)
         {
