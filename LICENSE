@@ -19,25 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-## 适用范围 / Scope
-
-本许可证适用于 `patcher-lab` 中由 Xtopia 原创的源代码、构建脚本、文档、图标
-与配置。以下内容**不适用**本许可证，其权利归各自权利人所有，使用条件见
-[NOTICE.md](NOTICE.md) 与 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)：
-
-- `src/PclPatcher.Gui.Net48/Controls/PclTheme.xaml`（从 PCL `Application.xaml`
-  提取的控件样式）；
-- PCL 本体、PCL 程序集、`PCL English` 字体及 PCL 的其他界面资源；
-- dnlib、.NET / WPF、Microsoft.NETFramework.ReferenceAssemblies 等第三方依赖；
-- 使用本工具修改 PCL 产生的**补丁产物**。
-
-`dist/` 下的发布产物由上述原创代码构建；其中内嵌的 PCL 派生内容仍不适用本
-许可证。本许可证不授予任何 PCL、Minecraft 或第三方软件的权利、豁免或抗辩。
-
-This license covers only the original portions of `patcher-lab` created by
-Xtopia. `PclTheme.xaml` (extracted from PCL's `Application.xaml`), PCL itself,
-PCL assemblies, the `PCL English` font, third-party dependencies, and patched
-PCL output are **not** licensed under it. See [NOTICE.md](NOTICE.md).
