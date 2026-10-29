@@ -38,7 +38,9 @@ internal sealed class StepPanel : StackPanel
         "LinkIgnoreDisable",
         "LinkRequireCustomPeer",
         "LinkPrecheckCustomPeer",
-        "LinkNoticeText"
+        "LinkNoticeText",
+        "LinkPeerHint",
+        "LinkPeerButtons"
     };
 
     private readonly List<StepRow> _rows = new List<StepRow>();
@@ -61,6 +63,8 @@ internal sealed class StepPanel : StackPanel
         Add("LinkRequireCustomPeer", "强制填写节点", "无默认节点");
         Add("LinkPrecheckCustomPeer", "建房前检查节点", "创建 / 加入入口");
         Add("LinkNoticeText", "替换联机提示", "示例文本 → 节点说明");
+        Add("LinkPeerHint", "改写节点说明", "自定义节点悬停文案");
+        Add("LinkPeerButtons", "修正节点按钮", "隐藏状态 / 官网链接");
         Add("DisableSelfUpdate", "禁用自更新", "ModSecret.UpdateStart");
     }
 
