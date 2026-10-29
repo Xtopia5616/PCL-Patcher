@@ -79,7 +79,7 @@ public partial class MainWindow : Window
         {
             PclDialog.Show(this,
                 "版本不匹配",
-                "当前文件不在已支持的版本范围（" + _catalog.SupportLabel + "）内，也没有可用的原版备份。\n" +
+                "当前文件不在已支持的版本范围（" + _catalog.SupportDescription + "）内，也没有可用的原版备份。\n" +
                 "请选择受支持的 PCL 版本，或先在“补丁选项”中勾选“允许未知版本”。",
                 "知道了",
                 tone: DialogTone.Warning);

@@ -1,4 +1,4 @@
-﻿#nullable enable
+#nullable enable
 
 namespace PclPatcher.Gui.Net48;
 
@@ -23,9 +23,9 @@ internal sealed class PclBuildProfile
 }
 
 /// <summary>
-/// Supported PCL builds, read from <c>PclPatcher --profiles</c>. The UI renders
-/// a range label (for example <c>2.99.0.1+</c>) instead of naming a single build,
-/// so adding a profile in the patcher is enough to update every screen.
+/// Supported PCL builds, read from <c>PclPatcher --profiles</c>. The UI shows the
+/// oldest supported build (for example <c>2.99.0.1</c>) and keeps the “and newer”
+/// wording in the tooltip, so adding a profile in the patcher updates every screen.
 /// </summary>
 internal sealed class PclVersionCatalog
 {
@@ -47,8 +47,8 @@ internal sealed class PclVersionCatalog
 
     public string MinimumVersion => IsLoaded ? _profiles[0].Version : string.Empty;
 
-    /// <summary>Compact label for the version row and badges, e.g. "2.99.0.1+".</summary>
-    public string SupportLabel => IsLoaded ? MinimumVersion + "+" : UnknownLabel;
+    /// <summary>Compact label for the version row and badges, e.g. "2.99.0.1".</summary>
+    public string SupportLabel => IsLoaded ? MinimumVersion : UnknownLabel;
 
     /// <summary>Human readable range, e.g. "2.99.0.1 及更高版本".</summary>
     public string SupportDescription => IsLoaded ? MinimumVersion + " 及更高版本" : "受支持的 PCL 版本";

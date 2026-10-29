@@ -76,7 +76,7 @@ public partial class MainWindow : Window
 
     /// <summary>
     /// Reads the supported PCL builds from the patcher, so the version row, the
-    /// about badge and the mismatch dialog all render the same "X+" range and no
+    /// about badge and the mismatch dialog all render the same label and no
     /// PCL build is hardcoded in the GUI.
     /// </summary>
     private async Task RefreshVersionCatalogAsync()

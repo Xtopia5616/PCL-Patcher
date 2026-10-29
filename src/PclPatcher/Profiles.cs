@@ -1,10 +1,11 @@
-﻿namespace PclPatcher;
+namespace PclPatcher;
 
 internal static partial class Program
 {
     // The profile table below is the single source of truth for supported PCL
-    // builds. The GUIs read it through `PclPatcher --profiles` and render a range
-    // label ("2.99.0.1+"), so adding a version never requires touching UI code.
+    // builds. The GUIs read it through `PclPatcher --profiles` and render the
+    // oldest supported version ("2.99.0.1"), so adding a version never requires
+    // touching UI code. The "+" range wording stays in CLI output.
     private static string KnownVersion => Profiles[0].Version;
     private static string SupportedRange => KnownVersion + "+";
 

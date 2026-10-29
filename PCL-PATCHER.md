@@ -476,7 +476,8 @@ PCL 的 `ModAnimation` 动画线程和 PCL 主窗体生命周期绑定，直接�
 发布包**不包含 PCL 本体**；首次启动会自动找 `D:\Minecraft\Plain Craft Launcher 2.exe`，
 找不到时弹文件选择框。
 
-界面里的版本下拉框显示的是**支持范围**（如 `2.99.0.1+`），不会硬编码单个版本号。
+界面里的版本下拉框显示的是**最老的支持版本**（如 `2.99.0.1`），悬停提示写明
+“2.99.0.1 及更高版本”，不会硬编码单个版本号。
 范围由 patcher 的 `Profiles` 表决定：GUI 启动后运行 `PclPatcher --profiles` 读取，
 新增版本只需在 `src\PclPatcher\Profiles.cs` 的 `Profiles` 里加一条 profile，GUI 会自动跟随。
 
