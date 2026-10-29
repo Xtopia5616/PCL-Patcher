@@ -12,6 +12,12 @@
 > 暗示与 PCL 作者存在关联。补丁后的 PCL 属于修改版，**不得分发**。完整说明见下方
 > [「合规与法律风险」](#合规与法律风险)与 [DISCLAIMER.md](DISCLAIMER.md)。
 
+> **侵权联系删除**
+>
+> 如你是权利人，认为本仓库中的代码、文档、图标或发布物侵犯了你的合法权益，请通过
+> [Issues](https://github.com/Xtopia5616/PCL-Patcher/issues) 联系，说明涉及的内容、
+> 权利依据与联系方式；核实后会在合理时间内删除或调整相关内容。
+
 Plain Craft Launcher (PCL) 的第三方 IL 补丁工具。
 
 许可证：[MIT](LICENSE)（原创部分；PCL 派生文件除外） · 免责声明：[DISCLAIMER.md](DISCLAIMER.md) ·

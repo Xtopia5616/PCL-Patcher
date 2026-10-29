@@ -58,6 +58,12 @@ UI 控件与设计来自 **Plain Craft Launcher (PCL)**，作者：**龙腾猫�
 上述署名与合理使用安排**不构成** PCL 对修改、再分发的许可；修改 PCL 仍
 可能违反 PCL 的分发有限许可。详见 [DISCLAIMER.md](DISCLAIMER.md) 第 4.3 节。
 
+若 PCL 作者或任何权利人认为本项目对 PCL 内容（包括 `PclTheme.xaml`、字号与
+界面资源）的使用超出了许可或合理使用范围，请通过仓库
+[Issues](https://github.com/Xtopia5616/PCL-Patcher/issues) 联系；核实后会立即
+删除、替换相关派生内容或调整使用方式。处理流程见
+[DISCLAIMER.md](DISCLAIMER.md) 第 13 节。
+
 ## 4. 第三方组件清单
 
 | 组件 | 权利归属 | 许可证 / 说明 |
