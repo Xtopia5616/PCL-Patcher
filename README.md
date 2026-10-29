@@ -321,6 +321,14 @@ GUI 会通过 `PclPatcher --profiles` 自动跟随，新增版本无需改 UI。
 .\dist\PclPatcher.exe "新的 PCL.exe" --adopt --save   # 写入 %LOCALAPPDATA%\PclPatcher\profiles.tsv
 ```
 
+更省事的一键流程（识别 → 试运行 → 原地补丁；锚点移动时加 `-Adopt` 先收录）：
+
+```powershell
+pwsh .\scripts\adapt_new_pcl.ps1 "新的 PCL.exe" -DryRun   # 只看结论
+pwsh .\scripts\adapt_new_pcl.ps1 "新的 PCL.exe"           # 原地补丁（自动 .bak，默认禁用自更新）
+pwsh .\scripts\adapt_new_pcl.ps1 "新的 PCL.exe" -Adopt    # 先收录再补丁
+```
+
 已归档的官方版本、来源提交、SHA-256、快照版验证结论见 [VERSIONS.md](VERSIONS.md)，
 实现细节见 [PCL-PATCHER.md](PCL-PATCHER.md) 的「2.2 快照版与后续版本的自动适配」。
 
