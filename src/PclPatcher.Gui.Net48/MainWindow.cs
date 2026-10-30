@@ -65,6 +65,10 @@ public partial class MainWindow : Window
     private PCL.MyButton _detectButton;
     private TextBlock _backupHint;
     private TextBlock _versionPillLabel;
+    private TextBlock _updateVersionLabel;
+    private TextBlock _updateStatus;
+    private PCL.MyButton _updateButton;
+    private bool _updateChecking;
     private bool _restoreAvailable;
     private bool _lastBackupKnown;
     private string _lastBackupPath;
@@ -122,6 +126,7 @@ public partial class MainWindow : Window
     private bool _suppressText;
     private bool _noOp;
     private bool _writeDenied;
+    private bool _downgradeBlocked;
     private bool _openReady;
     private bool _launchReady;
     private string _patchedOutputPath;
@@ -137,6 +142,7 @@ public partial class MainWindow : Window
     private double _lastSize;
     private bool _lastKnown;
     private string _structuralLabel;
+    private string _closestLabel;
     private int _infoGeneration;
     private int _probeGeneration;
 

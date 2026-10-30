@@ -4,9 +4,12 @@ internal static partial class Program
 {
     // The profile table below is the single source of truth for supported PCL
     // builds. The GUIs read it through `PclPatcher --profiles` and render the
-    // oldest supported version ("2.99.0.0"), so adding a version never requires
-    // touching UI code. The "+" range wording stays in CLI output.
-    private static string KnownVersion => Profiles[0].Version;
+    // oldest built-in version ("2.99.0.0"), so adding a version never requires
+    // touching UI code. The "+" range wording stays in CLI output. This has to
+    // come from the built-in table, not Profiles[0]: the external file may hold
+    // an adopted build older than the oldest supported one, and that must not
+    // silently rewrite the advertised range.
+    private static string KnownVersion => BuiltInProfiles[0].Version;
     private static string SupportedRange => KnownVersion + "+";
 
     private enum PatchState
@@ -32,7 +35,8 @@ internal static partial class Program
         IReadOnlyDictionary<string, string> Fingerprints,
         string Channel = "release",
         string Built = "",
-        bool Verified = true)
+        bool Verified = true,
+        bool Auto = false)
     {
         public string Label => Channel == "release" ? Version : $"{Version} {ChannelLabel(Channel)}";
     }
@@ -152,7 +156,9 @@ internal static partial class Program
     }
 
     // One tab separated line per adopted build:
-    //   build <tab> version <tab> sha256 <tab> channel <tab> built <tab> key=fp;key=fp;...
+    //   build <tab> version <tab> sha256 <tab> channel <tab> built <tab> key=fp;key=fp;… [<tab> auto]
+    // "auto" marks a build the patcher recorded itself after a forced in-place
+    // patch; it is always unverified and only saves the next run from --force.
     private static IEnumerable<PclProfile> ReadExternalProfiles()
     {
         string[] lines;
@@ -192,7 +198,8 @@ internal static partial class Program
             yield return new PclProfile(version, sha, fingerprints,
                 fields[3].Trim().Length == 0 ? "release" : fields[3].Trim(),
                 fields[4].Trim(),
-                Verified: false);
+                Verified: false,
+                Auto: fields.Length > 6 && fields[6].Trim() == "auto");
         }
     }
 
@@ -205,33 +212,18 @@ internal static partial class Program
 
     private static void CheckFingerprints(ModuleDef module, PclProfile profile, bool allowDrift)
     {
-        var drift = new List<string>();
-        foreach (var (key, expected) in profile.Fingerprints)
-        {
-            var parts = key.Split("::");
-            var methodPart = parts[1].Split('/');
-            var type = module.Find(parts[0], false);
-            var method = type?.Methods.FirstOrDefault(m =>
-                m.Name == methodPart[0] && m.MethodSig.Params.Count == int.Parse(methodPart[1]));
-            if (method?.Body is null)
-            {
-                drift.Add($"{key} missing");
-                continue;
-            }
-
-            var actual = Fingerprint(method);
-            if (actual == expected) continue;
-            drift.Add($"{key} expected {expected}, got {actual}");
-            Console.WriteLine($"fp     : {key,-55} DRIFT");
-        }
-
-        if (drift.Count == 0)
+        var comparison = CompareFingerprints(module, profile);
+        if (comparison.Differences.Count == 0)
         {
             Console.WriteLine($"fp     : all {profile.Fingerprints.Count} known method fingerprints match");
             return;
         }
 
-        foreach (var line in drift) Console.WriteLine("         " + line);
+        foreach (var (key, _) in comparison.Differences)
+            Console.WriteLine($"fp     : {key,-55} DRIFT");
+        foreach (var (_, detail) in comparison.Differences)
+            Console.WriteLine("         " + detail);
+
         if (allowDrift)
         {
             Console.WriteLine("WARN   : method fingerprint drift; continuing because --force/--dry-run");

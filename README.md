@@ -77,8 +77,9 @@ Plain Craft Launcher (PCL) 的第三方 IL 补丁工具：恢复被移除的下�
 
 ### 4. 网络安全、数据与个人信息
 
-- 本项目不收集遥测，不主动上传文件；但补丁后的 PCL 仍会按其自身逻辑联网，相关数据
-  处理以其隐私政策为准。
+- 本项目不收集遥测，不主动上传文件；「关于」页的「检查更新」只会 GET GitHub 上的
+  公开发布信息（版本号与发布页地址），不带任何本机标识。但补丁后的 PCL 仍会按其自身逻辑
+  联网，相关数据处理以其隐私政策为准。
 - 不得利用本项目侵入、干扰、破坏计算机信息系统，或非法获取、出售、提供个人信息，
   否则可能违反《网络安全法》《数据安全法》《个人信息保护法》等规定。
 
@@ -141,7 +142,7 @@ patcher-lab/
 │     ├─ MainWindow.cs              窗口字段与构造函数
 │     ├─ Views/                     补丁页、日志页、关于页等分页代码
 │     ├─ Controls/                  PCL 风格控件封装、日志面板、自绘对话框、PCL 查找窗口
-│     ├─ Common/                    版本目录（`--profiles`）、PCL 定位、快捷方式解析、本地设置
+│     ├─ Common/                    版本目录（`--profiles`）、更新检查、PCL 定位、快捷方式解析、本地设置
 │     └─ Properties/AssemblyInfo.cs
 ├─ assets/icon/                     图标源文件、生成脚本
 ├─ assets/screenshot/               界面 / 流程截图与截取脚本
@@ -218,7 +219,10 @@ GUI：
    `.bak` 里的原版，再按当前选项重新补丁**，旧补丁不会残留；备份原样保留。
    升级过 PCL 时要注意：`.bak` 可能还是上一代的原版，这时第一次补丁会把它刷新成
    当前版本；若源文件已补丁而 `.bak` 版本更旧，会提示先放回对应版本而不是悄悄降级；
-7. 随时用“还原备份”恢复原版。
+7. 随时用“还原备份”恢复原版；
+8. 「关于」页显示本工具的版本号与 GitHub 仓库地址：点「检查更新」会读取 GitHub 上的
+   最新 Release 并和本机版本比较——已是最新、发现新版本（可直接打开发布页）、或检查
+   失败（写明原因，仍可手动打开）。整页不主动联网，只有点这个按钮才会发一次 GET。
 
 用过的路径会记在 `%LOCALAPPDATA%\PclPatcher\settings.json`（最多 5 条），下次启动
 优先复查，通常不需要再点“自动检测”。同一文件也记录已确认的免责声明版本与确认时间；
@@ -256,14 +260,15 @@ GUI 默认以管理员权限启动（`app.manifest` 的 `requireAdministrator`�
 |---|---|
 | `--dry-run` | 应用并校验，但不写文件 |
 | `--restore` | 从 `<源文件>.bak` 还原 |
-| `--force` | 绕过未知哈希 / 指纹校验 |
+| `--force` | 仅跳过未知哈希 / 指纹校验（不含降级许可） |
+| `--allow-downgrade` | 已补丁源文件 + 更旧 `.bak` 时，显式接受降级重打 |
 | `--allow-partial` | 缺失 required 步骤时继续（仅用于新版本探测） |
 | `--download-only` | 只解锁下载，跳过七个联机补丁步骤 |
 | `--no-update` | 把 `ModSecret.UpdateStart` 改成 `ret`，禁用自更新 |
 | `--no-stop` | 不自动结束正在运行的 PCL |
 | `--fingerprints` | 打印关键方法指纹 |
-| `--identify` | 机器可读的构建身份（`exact` / `structural` / `unknown`，GUI 使用） |
-| `--probe` | 机器可读的逐步骤状态（`ready` / `already` / `missing` / `error`，GUI 选中文件时读取，不写文件） |
+| `--identify` | 机器可读的构建身份（`exact` / `structural` / `unknown`，附 `closest` 最接近构建，GUI 使用） |
+| `--probe` | 机器可读的逐步骤状态 + 构建身份（`ready` / `already` / `missing` / `error`，GUI 选中文件时读取，不写文件） |
 | `--adopt` | 打印新构建的渠道、哈希、指纹、Probe 矩阵与可粘贴的 profile 条目 |
 | `--adopt --save` | 同上，并写入 `%LOCALAPPDATA%\PclPatcher\profiles.tsv`（可用 `PCLPATCHER_PROFILES` 改路径） |
 | `--profiles` | 输出机器可读的受支持版本列表（GUI 使用，无需源文件） |
@@ -353,8 +358,8 @@ GUI 会通过 `PclPatcher --profiles` 自动跟随，新增版本无需改 UI。
 “新官方 exe + 旧 `.bak`”的状态（快照 0.0 → 0.1 就是这样）。这不会被误判成“已补丁”：
 结构指纹先认出新的官方构建，第一次补丁时旧备份被判定为过期并刷新
 （`backup : refreshing stale backup`）。如果源文件确实已补丁而 `.bak` 版本更旧
-（旧 patcher 留下的状态），patcher 会拒绝重打并提示放回对应版本，只有 `--force`
-才接受降级——无论哪条路径，都不会静默把启动器换回旧版本。
+（旧 patcher 留下的状态），patcher 会拒绝重打并提示放回对应版本，只有
+`--allow-downgrade` 才接受降级——无论哪条路径，都不会静默把启动器换回旧版本。
 
 锚点真的移动时，一条命令收录（无需重新编译，GUI 立即生效）：
 
@@ -376,7 +381,11 @@ pwsh .\scripts\adapt_new_pcl.ps1 "新的 PCL.exe" -Adopt    # 先收录再补丁
 
 未知且结构也不匹配的版本默认拒绝写入；可先用 `--dry-run` 观察每个步骤的 `Ready /
 Already / Missing`，或用 `--force` 强制尝试（仍会逐项 Probe/Verify，但可能产出
-不可运行的文件）。
+不可运行的文件）。日志会先打印 `closest: 2.99.0.1 (6/7)`，说明文件最像哪一版；
+原地补丁成功后，patcher 会把刚生成的 `.bak` 作为**未验证**构建自动收录到
+`profiles.tsv`（`--profiles` 里该条 `auto` 为 1），下次重打或 `--restore` 不必再加
+`--force`。`--force` 不包含降级许可，降级要 `--allow-downgrade`；没有任何步骤可应用时
+退出码为 2 且不写盘。
 
 更完整的 IL 分析、控制流重建与实测结论见 [PCL-PATCHER.md](PCL-PATCHER.md)。
 

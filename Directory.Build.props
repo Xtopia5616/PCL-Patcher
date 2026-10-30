@@ -8,7 +8,7 @@
     <Company>Xtopia</Company>
     <Authors>Xtopia &amp; DeepSeek</Authors>
     <Copyright>© 2026 Xtopia</Copyright>
-    <Version>1.1.1</Version>
+    <Version>1.1.2</Version>
     <LangVersion>latest</LangVersion>
     <Deterministic>true</Deterministic>
     <!-- NU1900 means the vulnerability feed could not be reached (offline build),

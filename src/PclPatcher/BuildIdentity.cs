@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+
 namespace PclPatcher;
 
 internal static partial class Program
@@ -10,37 +12,98 @@ internal static partial class Program
     /// A PCL build found in the source file. <paramref name="Match"/> is one of
     /// <c>exact</c> (sha256 in the profile table), <c>structural</c> (all method
     /// fingerprints match a profile, hash unknown), <c>patched</c> (source is a
-    /// patched copy whose .bak is a known build) or <c>unknown</c>.
+    /// patched copy whose .bak is a known build), <c>forced</c> (--force bypassed
+    /// the checks) or <c>unknown</c>.
     /// </summary>
     private sealed record BuildResolution(PclProfile? Profile, string Match, string Channel, bool IsKnownOriginal);
+
+    /// <summary>
+    /// The build a file resembles most, plus the anchors that differ. Only ever
+    /// reported, never used to choose a patch variant: every step is driven by
+    /// its own Probe, so "closest" must not become an implicit strategy.
+    /// </summary>
+    private sealed record ClosestMatch(
+        PclProfile Profile,
+        int Matched,
+        int Total,
+        IReadOnlyList<(string Key, string Detail)> Differences);
+
+    private sealed record FingerprintComparison(int Matched, List<(string Key, string Detail)> Differences);
+
+    // Profile keys are "Type::Method/argc"; parsing them once keeps the matching
+    // and verification loops from re-splitting the same seven strings per profile.
+    private static readonly ConcurrentDictionary<string, (string Type, string Method, int ArgCount)> FingerprintKeys = new();
+
+    private static (string Type, string Method, int ArgCount) ParseFingerprintKey(string key) =>
+        FingerprintKeys.GetOrAdd(key, static k =>
+        {
+            var halves = k.Split("::");
+            if (halves.Length != 2) return (string.Empty, string.Empty, -1);
+            var method = halves[1].Split('/');
+            if (method.Length != 2 || !int.TryParse(method[1], out var count)) return (string.Empty, string.Empty, -1);
+            return (halves[0], method[0], count);
+        });
+
+    /// <summary>Fingerprint of the anchor named by a "Type::Method/argc" key, or null when it is missing.</summary>
+    private static string? FingerprintOf(ModuleDef module, string key)
+    {
+        var (typeName, methodName, argCount) = ParseFingerprintKey(key);
+        if (typeName.Length == 0) return null;
+        var type = module.Find(typeName, false);
+        var method = type?.Methods.FirstOrDefault(m => m.Name == methodName && m.MethodSig.Params.Count == argCount);
+        return method?.Body is null ? null : Fingerprint(method);
+    }
+
+    /// <summary>
+    /// Compares one profile's anchors against the module. This is the only place
+    /// that knows how a profile is verified, shared by the hash check, structural
+    /// matching and the "closest build" hint, so those three cannot disagree.
+    /// </summary>
+    private static FingerprintComparison CompareFingerprints(ModuleDef module, PclProfile profile)
+    {
+        var matched = 0;
+        var differences = new List<(string Key, string Detail)>();
+        foreach (var (key, expected) in profile.Fingerprints)
+        {
+            var actual = FingerprintOf(module, key);
+            if (actual == expected)
+            {
+                matched++;
+                continue;
+            }
+
+            differences.Add((key, actual is null ? "missing" : $"expected {expected}, got {actual}"));
+        }
+        return new FingerprintComparison(matched, differences);
+    }
 
     /// <summary>
     /// Reads the channel word the launcher stamps next to its own version
     /// ("PCL 版本：快照版 2.99.0.0", "PCL 已更新至快照版 …"). PCL keeps the numeric
     /// version of the release line in snapshots, so the hash alone cannot tell
-    /// the two apart; the banner text can. The #US heap stores UTF-16 strings, so
-    /// scanning the raw image avoids depending on a dnlib heap API.
+    /// the two apart; the banner text can. The #US heap stores UTF-16 strings:
+    /// searching the raw bytes for the encoded phrase finds it at either heap
+    /// alignment, and unlike decoding the whole image twice it does not allocate
+    /// two multi-megabyte strings.
     /// </summary>
     private static string DetectChannel(string path, string version)
     {
         if (string.IsNullOrEmpty(version) || version == "<unknown>") return "unknown";
 
-        string text;
+        byte[] bytes;
         try
         {
-            var bytes = File.ReadAllBytes(path);
-            // The heap may start at an odd file offset; decode both alignments.
-            text = Encoding.Unicode.GetString(bytes) + "\n" + Encoding.Unicode.GetString(bytes, 1, bytes.Length - 1);
+            bytes = File.ReadAllBytes(path);
         }
         catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
         {
             return "unknown";
         }
 
-        foreach (var candidate in new[] { ("snapshot", "快照版"), ("beta", "测试版"), ("release", "正式版") })
+        var span = new ReadOnlySpan<byte>(bytes);
+        foreach (var (channel, word) in new[] { ("snapshot", "快照版"), ("beta", "测试版"), ("release", "正式版") })
         {
-            if (text.Contains(candidate.Item2 + " " + version, StringComparison.Ordinal))
-                return candidate.Item1;
+            if (span.IndexOf(Encoding.Unicode.GetBytes(word + " " + version)) >= 0) return channel;
         }
         return "unknown";
     }
@@ -51,31 +114,23 @@ internal static partial class Program
     /// this is what makes a new snapshot work without a new profile entry. A
     /// profile from the same channel wins; otherwise the first fingerprint match
     /// is used and the caller warns about the channel mismatch.
+    /// <paramref name="closest"/> always describes the best partial match, which
+    /// is what the unknown-build path reports when --force is needed.
     /// </summary>
-    private static PclProfile? MatchByFingerprints(ModuleDef module, string channel, out int matched, out int total,
+    private static PclProfile? MatchByFingerprints(ModuleDef module, string channel, out ClosestMatch? closest,
         bool quiet = false)
     {
-        matched = 0;
-        total = 0;
         var candidates = new List<PclProfile>();
+        closest = null;
         foreach (var profile in Profiles)
         {
-            var profileMatched = 0;
-            var profileTotal = 0;
-            foreach (var (key, expected) in profile.Fingerprints)
-            {
-                profileTotal++;
-                var parts = key.Split("::");
-                var methodPart = parts[1].Split('/');
-                var type = module.Find(parts[0], false);
-                var method = type?.Methods.FirstOrDefault(m =>
-                    m.Name == methodPart[0] && m.MethodSig.Params.Count == int.Parse(methodPart[1]));
-                if (method?.Body is not null && Fingerprint(method) == expected) profileMatched++;
-            }
+            var total = profile.Fingerprints.Count;
+            if (total == 0) continue;
 
-            if (profileTotal > 0 && profileMatched == profileTotal) candidates.Add(profile);
-            if (profileTotal > matched) matched = profileMatched;
-            if (profileTotal > total) total = profileTotal;
+            var comparison = CompareFingerprints(module, profile);
+            var match = new ClosestMatch(profile, comparison.Matched, total, comparison.Differences);
+            if (comparison.Matched == total) candidates.Add(profile);
+            if (IsCloser(match, closest, channel)) closest = match;
         }
 
         if (candidates.Count == 0) return null;
@@ -88,10 +143,33 @@ internal static partial class Program
         return fallback;
     }
 
+    private static bool IsCloser(ClosestMatch candidate, ClosestMatch? current, string channel)
+    {
+        if (current is null) return true;
+        if (candidate.Matched != current.Matched) return candidate.Matched > current.Matched;
+        return candidate.Profile.Channel == channel && current.Profile.Channel != channel;
+    }
+
+    /// <summary>
+    /// Renders the best partial match as two log lines, e.g.
+    /// <c>closest: 2.99.0.1 (6/7)</c> plus up to three anchor differences.
+    /// </summary>
+    private static void PrintClosest(ClosestMatch? closest)
+    {
+        if (closest is null || closest.Matched == 0) return;
+
+        Console.WriteLine($"closest: {closest.Profile.Label} ({closest.Matched}/{closest.Total})");
+        foreach (var (key, detail) in closest.Differences.Take(3))
+            Console.WriteLine($"         {key} {detail}");
+        var hidden = closest.Differences.Count - 3;
+        if (hidden > 0) Console.WriteLine($"         … 另有 {hidden} 个锚点不一致");
+    }
+
     /// <summary>
     /// Machine readable build report used by the GUI: the hash is unknown to the
     /// profile table, but the GUI must still be able to tell an unlisted snapshot
-    /// rebuild (structurally identical) from an unrelated binary.
+    /// rebuild (structurally identical) from an unrelated binary. The trailing
+    /// <c>closest</c> line carries the best partial match for the unknown case.
     /// </summary>
     private static int Identify(string source)
     {
@@ -108,14 +186,20 @@ internal static partial class Program
         var reportedChannel = profile?.Channel ?? channel;
         var label = profile?.Label ?? (channel == "unknown" ? version + " 未识别渠道" : $"{version} {ChannelLabel(channel)}");
 
+        ClosestMatch? closest = null;
         if (profile is null)
         {
-            var structural = MatchByFingerprints(module, channel, out var matched, out var total, quiet: true);
+            var structural = MatchByFingerprints(module, channel, out closest, quiet: true);
             if (structural is not null)
             {
                 match = "structural";
                 matchedProfile = structural;
                 label = $"{version} {ChannelLabel(channel == "unknown" ? structural.Channel : channel)}";
+            }
+            else if (closest is not null && closest.Matched == 0)
+            {
+                // Nothing in common: reporting it as "closest" would be noise.
+                closest = null;
             }
         }
 
@@ -125,6 +209,9 @@ internal static partial class Program
         Console.WriteLine($"build\t{label}");
         Console.WriteLine($"match\t{match}");
         Console.WriteLine($"profile\t{matchedProfile?.Label ?? string.Empty}");
+        Console.WriteLine(
+            $"closest\t{closest?.Profile.Label ?? string.Empty}\t" +
+            $"{(closest is null ? string.Empty : closest.Matched + "/" + closest.Total)}");
         Console.WriteLine($"sha256\t{hash}");
         return 0;
     }
@@ -151,16 +238,9 @@ internal static partial class Program
         Console.WriteLine($"sha256  : {hash}");
         Console.WriteLine();
         Console.WriteLine("fingerprints:");
-        var entries = new List<(string Key, string Value)>();
-        foreach (var (typeName, methodName, paramCount) in KeyMethods)
-        {
-            var type = module.Find(typeName, false);
-            var method = type?.Methods.FirstOrDefault(m => m.Name == methodName && m.MethodSig.Params.Count == paramCount);
-            var key = $"{typeName}::{methodName}/{paramCount}";
-            var value = method?.Body is null ? "<missing>" : Fingerprint(method);
-            entries.Add((key, value));
+        var entries = ReadKeyFingerprints(module);
+        foreach (var (key, value) in entries)
             Console.WriteLine($"  {key,-58} {value}");
-        }
 
         Console.WriteLine();
         Console.WriteLine("probe matrix:");
@@ -198,22 +278,51 @@ internal static partial class Program
 
         if (save)
         {
-            var line = $"build\t{version}\t{hash}\t{channel}\t{built}\t" +
-                       string.Join(";", entries.Select(e => e.Key + "=" + e.Value));
-            var directory = Path.GetDirectoryName(ExternalProfilePath)!;
-            Directory.CreateDirectory(directory);
-
-            var lines = File.Exists(ExternalProfilePath)
-                ? File.ReadAllLines(ExternalProfilePath).Where(l => !IsSameBuildLine(l, hash)).ToList()
-                : new List<string>();
-            lines.Add(line);
-            File.WriteAllLines(ExternalProfilePath, lines);
+            SaveAdoptedProfile(version, hash, channel, built, entries, auto: false);
             Console.WriteLine();
-            Console.WriteLine($"saved  : {ExternalProfilePath}");
             Console.WriteLine("         后续运行（含 GUI）会直接识别该构建。");
         }
 
         return 0;
+    }
+
+    /// <summary>The seven anchor fingerprints of a module, in profile-key form.</summary>
+    private static List<(string Key, string Value)> ReadKeyFingerprints(ModuleDef module) =>
+        KeyMethods
+            .Select(m =>
+            {
+                var key = $"{m.Type}::{m.Method}/{m.Params}";
+                return (Key: key, Value: FingerprintOf(module, key) ?? "<missing>");
+            })
+            .ToList();
+
+    /// <summary>
+    /// Appends one build to the external profile file, replacing any earlier line
+    /// for the same hash. <paramref name="auto"/> marks a build the tool recorded
+    /// itself after a forced in-place patch (see TryRememberOriginal); such a build
+    /// is never "verified", only "adopted".
+    /// </summary>
+    private static void SaveAdoptedProfile(string version, string hash, string channel, string built,
+        IReadOnlyList<(string Key, string Value)> entries, bool auto)
+    {
+        var line = $"build\t{version}\t{hash}\t{channel}\t{built}\t" +
+                   string.Join(";", entries.Select(e => e.Key + "=" + e.Value)) +
+                   (auto ? "\tauto" : string.Empty);
+        var directory = Path.GetDirectoryName(ExternalProfilePath)!;
+        Directory.CreateDirectory(directory);
+
+        var lines = File.Exists(ExternalProfilePath)
+            ? File.ReadAllLines(ExternalProfilePath).Where(l => !IsSameBuildLine(l, hash)).ToList()
+            : new List<string>();
+        if (auto)
+            lines.Add($"# auto-adopted by --force on {DateTime.Now:yyyy-MM-dd HH:mm} (unverified): {hash}");
+        lines.Add(line);
+        File.WriteAllLines(ExternalProfilePath, lines);
+
+        Console.WriteLine();
+        Console.WriteLine($"saved  : {ExternalProfilePath}");
+        if (auto)
+            Console.WriteLine("         已按未验证构建收录；下次还原/重打不再需要 --force。");
     }
 
     private static bool IsSameBuildLine(string line, string hash)

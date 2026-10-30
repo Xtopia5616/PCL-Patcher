@@ -137,14 +137,15 @@ public partial class MainWindow : Window
 
     /// <summary>
     /// Asks the patcher whether a hash we do not know is structurally identical to
-    /// a supported build (a snapshot rebuild). Returns the build label, for
-    /// example "2.99.0.0 快照版", or null when the file really is unrelated.
-    /// The GUI cannot do this itself: the fingerprints live in the patcher.
+    /// a supported build (a snapshot rebuild), and which build it resembles most.
+    /// The GUI cannot answer either question itself: the fingerprints live in the
+    /// patcher. Returns an empty structural label when the file is unrelated, and
+    /// an empty closest label when no profile shares a single anchor.
     /// </summary>
-    private async Task<string> IdentifyStructuralAsync(string path)
+    private async Task<(string Structural, string Closest)> IdentifyAsync(string path)
     {
         var host = _patcherPath;
-        if (string.IsNullOrEmpty(host)) return null;
+        if (string.IsNullOrEmpty(host)) return (null, null);
 
         var args = new List<string>(_patcherPrefix) { path, "--identify" };
         string output;
@@ -154,7 +155,7 @@ public partial class MainWindow : Window
         }
         catch
         {
-            return null;
+            return (null, null);
         }
 
         var fields = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -166,9 +167,23 @@ public partial class MainWindow : Window
             fields[line.Substring(0, tab)] = line.Substring(tab + 1).Trim();
         }
 
-        if (!fields.TryGetValue("match", out var match) || match != "structural") return null;
-        fields.TryGetValue("build", out var build);
-        return string.IsNullOrEmpty(build) ? "结构指纹匹配" : build;
+        string structural = null;
+        if (fields.TryGetValue("match", out var match) && match == "structural")
+        {
+            fields.TryGetValue("build", out var build);
+            structural = string.IsNullOrEmpty(build) ? "结构指纹匹配" : build;
+        }
+
+        string closest = null;
+        if (fields.TryGetValue("closest", out var closestRaw) && !string.IsNullOrEmpty(closestRaw))
+        {
+            var parts = closestRaw.Split('\t');
+            var label = parts[0].Trim();
+            var score = parts.Length > 1 ? parts[1].Trim() : string.Empty;
+            if (label.Length > 0) closest = score.Length == 0 ? label : label + "（" + score + "）";
+        }
+
+        return (structural, closest);
     }
 
     private void ApplyVersionCatalog(PclVersionCatalog catalog)
@@ -181,7 +196,9 @@ public partial class MainWindow : Window
             SyncVersionSelection();
         }
         if (_versionPillLabel is not null)
-            _versionPillLabel.Text = catalog.SupportLabel;
+            // "PCL 2.99.0.0+" keeps the supported-PCL badge apart from the
+            // patcher's own version in the 版本与更新 card.
+            _versionPillLabel.Text = catalog.IsLoaded ? "PCL " + catalog.SupportLabel : catalog.SupportLabel;
         RefreshVerifiedBuilds();
 
         if (_lastHash is not null)

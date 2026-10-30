@@ -147,7 +147,10 @@ PCL 的快照版（快照版渠道）和正式版**共用数字版本号**：快
 | 1 | SHA-256 命中 profile | `exact`，用该 profile 的指纹复核 | 否 |
 | 2 | 7 个锚点方法指纹全部命中某个 profile | `structural`，按该版本方案补丁 | 否 |
 | 3 | 同目录 `.bak` 命中 profile **且** 源文件带本工具的补丁形状（`LooksPatched`） | `patched`，从 `.bak` 原版重打 | 否 |
-| 4 | 都不命中 | `unknown` | 是（GUI：允许未知版本） |
+| 4 | 都不命中 | `unknown` | 是（GUI：允许未知版本）；日志另给 `closest: 版本 (n/7)` 仅作提示 |
+
+第 4 段只跳过身份校验：`--force` 不包含降级许可，降级要显式 `--allow-downgrade`。
+`closest` 由部分指纹匹配算出，只出现在日志/`--identify` 里，不参与选择补丁变体。
 
 第 2 段排在第 3 段前是有意的：锚点指纹扛得住“重新构建”，扛不住“打补丁”，
 所以先证伪“已补丁”再谈备份，见 §2.3。
@@ -182,7 +185,7 @@ build <TAB> 版本 <TAB> sha256 <TAB> 渠道 <TAB> 构建日期 <TAB> 方法=指
 ```
 
 `--profiles` 会同时列出内置与外部条目；重复的 SHA-256 以先出现的为准。
-输出头部的 `profiles 4` 之后有 `feature probe` 能力标记：GUI 只有看到它才会调用
+输出头部的 `profiles 5` 之后有 `feature probe` 能力标记：GUI 只有看到它才会调用
 `--probe` 读取逐步骤状态；旧 patcher 不认识未知开关，会把它当成一次正常的原地补丁，
 这个握手就是用来避免误写的。
 
@@ -213,7 +216,7 @@ Plain Craft Launcher 2.exe.bak  2.99.0.0 快照版 (414)   5,985,280   ← 上�
 | 位置 | 修复 |
 |---|---|
 | `ResolveBuild` | 结构指纹判定移到 `.bak` 之前；`.bak` 分支额外要求 `LooksPatched(module)`，否则打印 `ignoring the backup` 继续走指纹 |
-| `DetectPatchedSource` | 已经过 `LooksPatched`，再加版本闸门：源文件与 `.bak` 的 `FileVersion` 不同就拒绝（`--force` 才降级），提示先放回对应版本的完整包 |
+| `DetectPatchedSource` | 已经过 `LooksPatched`，再加版本闸门：源文件与 `.bak` 的 `FileVersion` 不同就拒绝（`--allow-downgrade` 才降级），提示先放回对应版本的完整包 |
 | `PrepareBackup` | 源文件是已验证原版（`exact` / `structural`）而 `.bak` 哈希不同 → 判定为过期备份，刷新为当前版本 |
 
 `--restore` 也补了一句 `WARN`：备份版本与源文件不同时明确写出“还原会降级到备份版本”，
@@ -500,7 +503,7 @@ dotnet build .\src\PclPatcher\PclPatcher.csproj -c Release
 此时不打补丁就不会动 `.bak`；一旦补丁新版本，旧备份被判定为过期并刷新为新版本
 （`backup : refreshing stale backup`），避免之后还原或重打把启动器降级。若源文件
 已经是补丁状态而 `.bak` 版本不同（旧 patcher 留下的状态），直接拒绝并以
-`--force` 作为显式降级开关。
+`--allow-downgrade` 作为显式降级开关；`--force` 只跳过身份校验，不再顺带允许降级。
 
 还原：
 
@@ -522,15 +525,27 @@ dotnet build .\src\PclPatcher\PclPatcher.csproj -c Release
 ```powershell
 --restore              # 从 <源文件>.bak 还原
 --dry-run              # 只应用 + 校验，不写文件
---force                # 绕过已知哈希/指纹校验
+--force                # 仅跳过已知哈希/指纹校验（不包含降级许可）
+--allow-downgrade      # 已补丁源文件 + 旧版 .bak 时，显式接受降级重打
 --allow-partial        # 缺失 required 步骤时跳过继续（用于新版本探测）
 --download-only        # 只解锁下载，跳过联机七步
 --no-update            # 把 ModSecret.UpdateStart 改成 ret，禁用自更新
 --no-stop              # 不自动结束正在运行的 PCL
 --fingerprints         # 打印关键方法指纹，供新版本适配
---probe                # 机器可读的逐步骤状态（GUI 选中文件时读取，不写文件）
+--probe                # 机器可读的逐步骤状态 + 构建身份（GUI 选中文件时读取，不写文件）
 --profiles             # 输出受支持的版本列表（GUI 读取，无源文件也可运行）
 ```
+
+未知构建（`match=unknown`）的处理：
+
+- `--force` 只跳过身份校验，**不会**顺带允许降级；降级必须显式加 `--allow-downgrade`。
+- 日志先打印 `closest: <版本> (n/7)` 和缺失的锚点，说明这个文件最像哪一版。它只用于
+  提示，不参与选路：补丁步骤仍由每一步自己的 `Probe` 决定。
+- 原地补丁成功后，patcher 会把刚保存的 `.bak` 作为**未验证构建**写入
+  `%LOCALAPPDATA%\PclPatcher\profiles.tsv`（行尾 `auto`，文件里附一行注释），
+  于是下次重打/`--restore` 不必再加 `--force`。已补丁的旧产物不会被收录，只告警。
+- 退出码：`0` 成功（含“已是补丁状态”）；`2` 没有任何步骤被应用（未写盘）；
+  `1` 失败（含被拒绝的降级）。
 
 原地补丁/还原前会先结束正在运行的 PCL（按进程名或 exe 路径匹配），避免 Windows
 锁住文件导致替换失败；不想自动退出时加 `--no-stop`。
@@ -600,7 +615,7 @@ PCL 风格的圆形高亮 + 轻阴影，窗口不提供最大化按钮（与 PCL
 - **补丁**：主程序 / 输出 / 选项，右侧是完整的补丁流程与运行环境（步骤随解锁范围增减，选中文件后先逐项探测并显示 待应用 / 已应用 / 未匹配）；窗口变窄时自动收成单列；
 - **日志**：实时彩色日志、自动滚动、复制、清空；patcher 的启动横幅（署名 + 题记
   “Some birds aren't meant to be caged…”）会作为每次运行的日志开头；
-- **关于**：应用信息、龙腾猫跃署名、PCL 项目与许可、Minecraft 正版提示。
+- **关于**：应用信息、版本与更新（GitHub）、龙腾猫跃署名、PCL 项目与许可、Minecraft 正版提示。
 
 “输出文件”默认就是源文件：点“开始补丁”会先确认、自动备份为 `.bak`，再原子替换；
 旁边的“还原备份”随时把源文件恢复为原版。“另存为”仍然可以写到副本，此时源文件不变。
@@ -648,7 +663,36 @@ PCL 的 `ModAnimation` 动画线程和 PCL 主窗体生命周期绑定，直接�
 
 范围由 patcher 的 `Profiles` 表决定：GUI 启动后运行 `PclPatcher --profiles` 读取，
 新增版本只需在 `src\PclPatcher\Profiles.cs` 的 `Profiles` 里加一条 profile，GUI 会自动跟随。
-界面上统一显示为 `2.99.0.0+`。
+界面上统一显示为 `2.99.0.0+`，并加了 `PCL ` 前缀，避免和关于页里本工具自己的版本号混淆。
+
+### 9.1 关于页：版本号与「检查更新」
+
+关于页新增「版本与更新」卡片：版本号取自程序集元数据（`Directory.Build.props` 的
+`<Version>`，不再手写进代码），右侧是「检查更新」按钮，下面常驻 GitHub 仓库与发布页链接；
+页头另外把仓库网址原样写出来，方便复制。
+
+点「检查更新」只做一次 GET，不上传任何本机信息：
+
+| 顺序 | 地址 | 用途 |
+|---|---|---|
+| 1 | `api.github.com/repos/Xtopia5616/PCL-Patcher/releases/latest` | 取 `tag_name` / `html_url` / 发布时间 |
+| 2 | `github.com/Xtopia5616/PCL-Patcher/releases.atom` | API 不可用（限流、403、代理拦截）时的公开订阅源，不占 API 配额 |
+
+版本比较按点分数字逐段比较：`v` 前缀与 `+build` 后缀会先剥掉，缺省段按 0 处理，
+同号时正式版高于预发布版；因此 `1.1.2`、`v1.1.2.0`、`1.1.2+abc` 等价。
+
+结果分三种：
+
+- **已是最新**（或本机构建比线上还新）：绿色状态行；
+- **发现新版本**：橙色状态行，同时弹窗询问是否打开发布页；
+- **检查失败**：红色状态行写明原因（DNS、连接中断、TLS、403…），发布页链接仍然可用。
+
+读不到版本号时（例如自编译产物没有版本元数据），卡片显示「版本未知」，按钮直接打开
+GitHub 发布页：这正是原先只写“版本未知”的位置，现在文案里就说明可以去 GitHub 检查更新。
+
+调试 / 镜像：`PCLPATCHER_UPDATE_API` 可覆盖第 1 步的地址（Atom 兜底仍走 github.com）。
+指向 `http://127.0.0.1:<port>/release.json` 的本地假 feed 即可回归上表三种结果——
+回环地址会绕开系统代理，`.test/gui-update2.ps1` 就是这么截图的。
 
 选择逻辑有独立回归用例（`patcher-lab/.test/catalogtest`，纯 net48 控制台）：
 0.0 原版 → `2.99.0.0`，0.1 原版 → `2.99.0.1`，0.1 已打补丁 → 靠 `.bak` 仍显示 `2.99.0.1`，
@@ -675,7 +719,7 @@ Patcher 内置：
   “已补丁”必须同时满足“源文件哈希未知 + `.bak` 是已知原版 + 三个必选下载锚点已是
   补丁形状”，避免把“新 PCL 旁边留着旧 `.bak`”误当成补丁产物而被还原成旧版本；
   `ResolveBuild` 与 `DetectPatchedSource` 两处都走这条判据，且 `.bak` 的版本号必须与
-  源文件一致，否则拒绝重打（`--force` 才接受降级）；
+  源文件一致，否则拒绝重打（`--allow-downgrade` 才接受降级）；
 - `MaxStackCalculator` 计算最大栈深；
 - 全模块 IL 校验：分支/switch 目标、异常处理边界、空方法体；
 - 参数索引校验：`ldarg.*` 超出方法实参槽位（典型是往静态方法里塞 `ldarg.0`）立即中止——

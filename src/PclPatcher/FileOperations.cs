@@ -12,7 +12,7 @@ internal static partial class Program
     /// and rebuilding that from the backup would silently downgrade the launcher.
     /// The patched IL shapes have to confirm it (see <see cref="LooksPatched"/>).
     /// </summary>
-    private static PclProfile? DetectPatchedSource(string source, string sourceHash, string backup, bool force)
+    private static PclProfile? DetectPatchedSource(string source, string sourceHash, string backup, bool allowDowngrade)
     {
         if (Profiles.Any(p => p.Sha256 == sourceHash)) return null;
 
@@ -38,7 +38,8 @@ internal static partial class Program
         // PCL's self-update replaces the exe in place and leaves .bak behind, so
         // "patched 2.99.0.1 + .bak 2.99.0.0" is what a launcher updated after
         // patching looks like. Rebuilding from that backup silently downgrades
-        // the launcher, so refuse unless the downgrade is explicit.
+        // the launcher, so refuse unless the downgrade is explicit. --force only
+        // skips the identity check; allowing a downgrade is a separate decision.
         var sourceVersion = FileVersionInfo.GetVersionInfo(source).FileVersion;
         var backupVersion = FileVersionInfo.GetVersionInfo(backup).FileVersion;
         if (!string.Equals(sourceVersion, backupVersion, StringComparison.OrdinalIgnoreCase))
@@ -47,8 +48,9 @@ internal static partial class Program
                 $"source is patched ({sourceVersion}) but {Path.GetFileName(backup)} is a different build ({backupVersion}); " +
                 "rebuilding from it would downgrade the launcher. Put the pristine " +
                 $"{sourceVersion} build back (PCL: 检查更新 → 下载完整包) and patch again, " +
-                "or pass --force to accept the downgrade.";
-            if (!force) throw new InvalidOperationException(message);
+                "or pass --allow-downgrade to accept the downgrade.";
+            if (!allowDowngrade) throw new InvalidOperationException(message + Environment.NewLine +
+                                                                    "  源文件未修改。");
             Console.WriteLine("WARN   : " + message);
         }
 
@@ -82,10 +84,11 @@ internal static partial class Program
         // Probe the anchors before the backup: they survive a snapshot rebuild but
         // not a patch, so a build that matches all seven is an original even if an
         // old .bak sits next to it, and a patched copy falls through.
-        var structural = MatchByFingerprints(module, channel, out var matched, out var total);
+        var structural = MatchByFingerprints(module, channel, out var closest);
         if (structural is not null)
         {
-            Console.WriteLine($"match  : structural {matched}/{total} fingerprints → {structural.Label} (unlisted build)");
+            Console.WriteLine($"match  : structural → {structural.Label} (unlisted build), " +
+                              $"all {structural.Fingerprints.Count} anchors match");
             if (File.Exists(backup))
             {
                 var staleProfile = Profiles.FirstOrDefault(p => p.Sha256 == Sha256(backup));
@@ -94,13 +97,18 @@ internal static partial class Program
             return new BuildResolution(structural, "structural", channel, true);
         }
 
+        // No full match: report the resemblance so --force is an informed choice
+        // instead of a leap. This is display only; the patch plan is unchanged.
+        PrintClosest(closest);
+
+        var patched = LooksPatched(module);
         if (File.Exists(backup))
         {
             var backupHash = Sha256(backup);
             var backupProfile = Profiles.FirstOrDefault(p => p.Sha256 == backupHash);
             if (backupProfile is not null)
             {
-                if (LooksPatched(module))
+                if (patched)
                 {
                     Console.WriteLine($"note   : source sha256 {hash} is not the known original,");
                     Console.WriteLine($"         but backup matches {backupProfile.Label}; treating source as already patched");
@@ -111,7 +119,22 @@ internal static partial class Program
             else
             {
                 Console.WriteLine($"WARN   : backup exists but its sha256 is unknown ({backupHash})");
+                if (patched)
+                {
+                    // Old patch product: nothing records which pristine build it
+                    // came from, so every step runs on top of the existing patch.
+                    Console.WriteLine("WARN   : source already carries this tool's patch; patching on top of it instead");
+                    Console.WriteLine("         of rebuilding from a pristine copy. Run --adopt on the backup to record it.");
+                }
             }
+        }
+        else if (patched)
+        {
+            // No .bak at all: the backup about to be written is this patched
+            // file, so it is not a restorable original and must not be recorded
+            // as one. Say so before anything touches the disk.
+            Console.WriteLine("WARN   : source already carries this tool's patch, but there is no .bak; patching on top of it.");
+            Console.WriteLine("         The backup created now will be this patched file, not a pristine original.");
         }
 
         if (force)
@@ -127,11 +150,12 @@ internal static partial class Program
         }
 
         throw new InvalidOperationException(
-            $"unverified PCL binary (version={version}, sha256={hash}); " +
-            $"supported builds: {string.Join(", ", Profiles.Select(p => p.Label))} ({SupportedRange}). " +
-            "Snapshots that keep the anchor methods are matched by fingerprint automatically; " +
-            "for a build whose anchors moved run --adopt and add the printed profile, " +
-            "or pass --force to write anyway.");
+            $"unverified PCL binary: {source}" + Environment.NewLine +
+            $"  version={version}, sha256={hash}" + Environment.NewLine +
+            $"  supported builds: {string.Join(", ", Profiles.Select(p => p.Label))} ({SupportedRange})" + Environment.NewLine +
+            "  Snapshots that keep the anchor methods are matched by fingerprint automatically;" + Environment.NewLine +
+            "  for a build whose anchors moved run --adopt and add the printed profile, or pass --force to write anyway." + Environment.NewLine +
+            "  Preview first: --dry-run --force writes nothing and still prints every Probe.");
     }
 
     /// <summary>
@@ -177,6 +201,37 @@ internal static partial class Program
         finally
         {
             TryDelete(temp);
+        }
+    }
+
+    /// <summary>
+    /// After a forced in-place patch, record the pristine <c>.bak</c> as an
+    /// unverified profile. Without this the next run cannot tell “our patched
+    /// copy” from “an unrelated exe next to a .bak”: it keeps asking for
+    /// <c>--force</c>, and <c>--restore</c> has no known base to rebuild from.
+    /// Only the build actually patched from is recorded — a stale <c>.bak</c> of
+    /// a different build must never be blessed because it sat next to the source.
+    /// </summary>
+    private static void TryRememberOriginal(string backup, string baseHash)
+    {
+        if (!File.Exists(backup)) return;
+        if (!string.Equals(Sha256(backup), baseHash, StringComparison.OrdinalIgnoreCase)) return;
+        if (Profiles.Any(p => string.Equals(p.Sha256, baseHash, StringComparison.OrdinalIgnoreCase))) return;
+
+        var version = FileVersionInfo.GetVersionInfo(backup).FileVersion ?? "<unknown>";
+        if (version == "<unknown>") return;
+
+        try
+        {
+            using var module = ModuleDefMD.Load(backup);
+            SaveAdoptedProfile(version, baseHash, DetectChannel(backup, version),
+                DateTime.Now.ToString("yyyy-MM-dd"), ReadKeyFingerprints(module), auto: true);
+        }
+        catch (Exception ex)
+        {
+            // Recording the build is a convenience: a read-only %LOCALAPPDATA%
+            // must not turn a successful patch into a failed run.
+            Console.WriteLine("WARN   : could not record the pristine build: " + ex.Message);
         }
     }
 

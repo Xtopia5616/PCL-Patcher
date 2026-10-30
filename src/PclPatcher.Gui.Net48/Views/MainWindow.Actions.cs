@@ -80,19 +80,22 @@ public partial class MainWindow : Window
             // The patcher may still accept this build by structural fingerprints
             // (unlisted snapshot rebuild); only ask for the escape hatch when the
             // identify pass also came back empty.
-            var structural = await IdentifyStructuralAsync(fullSource);
-            if (string.IsNullOrEmpty(structural))
+            var identified = await IdentifyAsync(fullSource);
+            if (string.IsNullOrEmpty(identified.Structural))
             {
+                var closest = string.IsNullOrEmpty(identified.Closest)
+                    ? string.Empty
+                    : "\n\n最接近的已收录构建：" + identified.Closest + "（锚点指纹不一致）。";
                 PclDialog.Show(this,
                     "版本不匹配",
-                    "当前文件不在已支持的版本范围（" + _catalog.SupportDescription + "）内，也没有可用的原版备份。\n" +
-                    "请选择受支持的 PCL 版本，或先在“补丁选项”中勾选“允许未知版本”。",
+                    "当前文件不在已支持的版本范围（" + _catalog.SupportDescription + "）内，也没有可用的原版备份。" +
+                    closest + "\n请选择受支持的 PCL 版本，或先在“补丁选项”中勾选“允许未知版本”。",
                     "知道了",
                     tone: DialogTone.Warning);
                 return;
             }
 
-            _structuralLabel = structural;
+            _structuralLabel = identified.Structural;
             SyncVersionSelection();
         }
 
@@ -120,6 +123,9 @@ public partial class MainWindow : Window
                   "改过“同时解锁联机 / 禁用更新”后，直接再点开始补丁即可。\n\n" + backupText
                 : "补丁会直接替换源文件：\n" + fullSource + "\n\n补丁范围：" + scope + "\n\n" + backupText +
                   "\n\n补丁后可用“还原备份”恢复原版。";
+            if (_forceBox.Checked == true)
+                message += "\n\n⚠ 已勾选“允许未知版本”：本次不校验 SHA-256 与方法指纹，" +
+                           "写出的 PCL 可能无法启动。";
             var confirm = PclDialog.Show(this,
                 alreadyPatched ? "重新补丁" : "替换源文件",
                 message, alreadyPatched ? "还原并重新补丁" : "继续", "取消", DialogTone.Question);
@@ -236,6 +242,7 @@ public partial class MainWindow : Window
         _probeGeneration++;
         _noOp = false;
         _writeDenied = false;
+        _downgradeBlocked = false;
         SetBusy(true);
         _resultBanner.Visibility = Visibility.Collapsed;
         _log.Clear();
@@ -359,6 +366,36 @@ public partial class MainWindow : Window
                     if (retry && RestartAsAdministrator()) return;
                     ShowResult(ResultTone.Error, "补丁没有写入：当前环境没有该目录的写权限。", true, false);
                 }
+                else if (_downgradeBlocked && !restore)
+                {
+                    // The patcher refuses to rebuild from an older .bak unless the
+                    // downgrade is explicit; --force never implies it. Ask here
+                    // instead of making the user discover --allow-downgrade.
+                    SetStatus("会降级到备份版本", StatusTone.Warn);
+                    var allow = PclDialog.Show(this,
+                        "会降级到备份版本",
+                        "源文件已经是补丁状态，但同目录的 .bak 是另一个（更旧的）PCL 构建。\n" +
+                        "从该备份重新补丁会把启动器降级。\n\n" +
+                        "“允许未知版本”只跳过版本校验，不会允许降级；要降级需要在这里明确同意。\n\n" +
+                        "源文件尚未修改。",
+                        "允许降级", "取消", DialogTone.Warning);
+                    if (allow)
+                    {
+                        var retryArgs = new List<string>(args) { "--allow-downgrade" };
+                        await RunPatcherAsync(retryArgs, target, restore);
+                        return;
+                    }
+                    ShowResult(ResultTone.Error, "已取消：不会从更旧的备份降级重打。", true, false);
+                }
+                else if (process.ExitCode == 2)
+                {
+                    // Nothing was applied: every anchor was missing or skipped.
+                    // The file on disk is unchanged, which is not a crash.
+                    SetStatus("没有可应用的步骤", StatusTone.Warn);
+                    ShowResult(ResultTone.Info,
+                        "0 个步骤被应用（锚点缺失或全部被跳过），文件未修改。请查看日志中的 probe 行。",
+                        true, false);
+                }
                 else
                 {
                     SetStatus((restore ? "还原失败，退出码 " : "补丁失败，退出码 ") + process.ExitCode, StatusTone.Error);
@@ -395,6 +432,8 @@ public partial class MainWindow : Window
             return;
         }
         if (line.StartsWith("already:", StringComparison.Ordinal)) _noOp = true;
+        if (line.IndexOf("would downgrade the launcher", StringComparison.OrdinalIgnoreCase) >= 0)
+            _downgradeBlocked = true;
         if (line.IndexOf("cannot write to", StringComparison.OrdinalIgnoreCase) >= 0 ||
             line.IndexOf("Access is denied", StringComparison.OrdinalIgnoreCase) >= 0 ||
             line.IndexOf("拒绝访问", StringComparison.Ordinal) >= 0)
@@ -511,6 +550,113 @@ public partial class MainWindow : Window
             RepeatBehavior = RepeatBehavior.Forever,
             EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
         });
+    }
+
+    // ------------------------------------------------------------------
+    // Update check (About page)
+    // ------------------------------------------------------------------
+
+    private async void CheckUpdates_Click()
+    {
+        if (_updateChecking) return;
+
+        // No readable version means no comparison: do exactly what the
+        // unknown-version copy promises and open the release page.
+        if (string.IsNullOrEmpty(UpdateChecker.CurrentVersion))
+        {
+            OpenInBrowser(UpdateChecker.ReleasesUrl);
+            SetUpdateStatus("版本未知，无法自动比较新旧；已在浏览器打开 GitHub 发布页。", PclUi.Amber);
+            return;
+        }
+
+        _updateChecking = true;
+        _updateButton.IsEnabled = false;
+        _updateButton.Opacity = 0.55;
+        SetUpdateStatus("正在检查 GitHub 上的最新版本…", PclUi.Muted);
+
+        UpdateCheckResult result;
+        try
+        {
+            result = await UpdateChecker.CheckAsync();
+        }
+        catch (Exception ex)
+        {
+            result = new UpdateCheckResult
+            {
+                State = UpdateCheckState.Failed,
+                CurrentVersion = UpdateChecker.CurrentVersion,
+                Error = ex.Message,
+                ReleaseUrl = UpdateChecker.ReleasesUrl
+            };
+        }
+
+        _updateChecking = false;
+        _updateButton.IsEnabled = true;
+        _updateButton.Opacity = 1.0;
+        ApplyUpdateResult(result);
+    }
+
+    /// <summary>
+    /// Renders one check result in the About card. A newer release also asks
+    /// whether to open the release page, so the answer is not buried in a
+    /// one-line status.
+    /// </summary>
+    private void ApplyUpdateResult(UpdateCheckResult result)
+    {
+        if (result is null) return;
+
+        switch (result.State)
+        {
+            case UpdateCheckState.UpToDate:
+                var comparison = UpdateChecker.CompareVersions(result.CurrentVersion, result.LatestVersion);
+                SetUpdateStatus(comparison > 0
+                        ? "已是最新：当前 v" + result.CurrentVersion + " 比 GitHub 最新发布 v" + result.LatestVersion + " 还新（刚刚检查）。"
+                        : "已是最新版本 v" + result.CurrentVersion + "（刚刚检查）。",
+                    PclUi.Green);
+                break;
+
+            case UpdateCheckState.NewerVersion:
+                SetUpdateStatus("发现新版本 v" + result.LatestVersion + "，当前 v" + result.CurrentVersion +
+                                "（刚刚检查）；可打开发布页查看更新说明。", PclUi.Amber);
+                var open = PclDialog.Show(this,
+                    "发现新版本",
+                    "GitHub 上已有新版本：v" + result.LatestVersion + "\n" +
+                    "当前版本：v" + result.CurrentVersion + "\n\n" +
+                    "是否打开发布页查看更新说明与下载？",
+                    "打开发布页", "稍后", DialogTone.Info);
+                if (open) OpenInBrowser(result.ReleaseUrl);
+                break;
+
+            case UpdateCheckState.UnknownVersion:
+                OpenInBrowser(UpdateChecker.ReleasesUrl);
+                SetUpdateStatus("版本未知，无法自动比较新旧；已在浏览器打开 GitHub 发布页。", PclUi.Amber);
+                break;
+
+            default:
+                SetUpdateStatus("检查失败：" + (string.IsNullOrEmpty(result.Error) ? "未知错误" : result.Error) +
+                                "。可打开发布页手动确认。", PclUi.Red);
+                break;
+        }
+    }
+
+    private void SetUpdateStatus(string text, Color color)
+    {
+        if (_updateStatus is null) return;
+        _updateStatus.Text = text;
+        _updateStatus.Foreground = PclUi.Frozen(color);
+    }
+
+    private static void OpenInBrowser(string url)
+    {
+        if (string.IsNullOrEmpty(url)) return;
+        try
+        {
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch
+        {
+            // A missing browser association must not crash the About page.
+        }
     }
 
     private void OpenFolder_Click()

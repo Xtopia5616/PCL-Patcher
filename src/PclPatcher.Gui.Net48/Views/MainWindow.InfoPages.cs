@@ -83,12 +83,80 @@ public partial class MainWindow : Window
         badges.Children.Add(netPill);
         heroBody.Children.Add(badges);
 
+        // The repository address is spelled out, not just labelled: the About
+        // page doubles as the place to copy the project link from.
+        var repoLine = new TextBlock
+        {
+            FontFamily = PclUi.Font,
+            FontSize = 11.5,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 10, 0, 0)
+        };
+        repoLine.Inlines.Add(new Run("GitHub 仓库：") { Foreground = PclUi.MutedBrush });
+        repoLine.Inlines.Add(PclUi.Link("github.com/Xtopia5616/PCL-Patcher", UpdateChecker.RepositoryUrl, 11.5));
+        repoLine.Inlines.Add(new Run("（Issues / 更新记录见下方「版本与更新」）") { Foreground = PclUi.MutedBrush });
+        heroBody.Children.Add(repoLine);
+
         var intro = PclUi.Label(
             "在本机 PCL 副本上恢复被移除的下载入口；可选择同时恢复联机入口。默认直接替换源文件，替换前自动备份为 .bak，可随时还原。",
             12.5, PclUi.Ink, null, true);
         intro.LineHeight = 21;
         intro.Margin = new Thickness(0, 14, 0, 0);
         heroBody.Children.Add(intro);
+
+        // Version and updates: the GUI reads its own version from the assembly
+        // metadata and compares it with the newest GitHub release on demand.
+        // Without readable metadata the card says “版本未知” and the button just
+        // opens the release page, which is the only useful action then.
+        var updates = PclUi.Card("版本与更新", out var updateBody, 10);
+        left.Children.Add(updates);
+
+        var current = UpdateChecker.CurrentVersion;
+        var unknownVersion = string.IsNullOrEmpty(current);
+
+        var updateHead = new Grid();
+        updateHead.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        updateHead.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var versionStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        versionStack.Children.Add(PclUi.Label("PCL Patcher", 11, PclUi.Muted));
+        _updateVersionLabel = PclUi.Label(
+            unknownVersion ? "版本未知" : "v" + current,
+            17, unknownVersion ? PclUi.Amber : PclUi.Accent, FontWeights.SemiBold);
+        _updateVersionLabel.Margin = new Thickness(0, 1, 0, 0);
+        versionStack.Children.Add(_updateVersionLabel);
+        updateHead.Children.Add(versionStack);
+
+        _updateButton = PclUi.Button("检查更新", CheckUpdates_Click, 30);
+        _updateButton.MinWidth = 88;
+        _updateButton.Padding = new Thickness(12, 0, 12, 0);
+        _updateButton.Margin = new Thickness(10, 0, 0, 0);
+        _updateButton.VerticalAlignment = VerticalAlignment.Center;
+        _updateButton.ToolTip = "读取 GitHub 上的最新发布，与本机版本比较";
+        Grid.SetColumn(_updateButton, 1);
+        updateHead.Children.Add(_updateButton);
+        updateBody.Children.Add(updateHead);
+
+        _updateStatus = PclUi.Label(
+            unknownVersion
+                ? "版本未知：没有读取到本工具的版本号，无法自动比较新旧；点「检查更新」会到 GitHub 查看最新发布。"
+                : "尚未检查更新。点「检查更新」会读取 GitHub 上的最新发布并比较版本。",
+            11, unknownVersion ? PclUi.Amber : PclUi.Muted, null, true);
+        _updateStatus.LineHeight = 17;
+        _updateStatus.Margin = new Thickness(0, 10, 0, 0);
+        AutomationProperties.SetHelpText(_updateStatus, "更新检查状态");
+        updateBody.Children.Add(_updateStatus);
+
+        var updateLinks = new TextBlock
+        {
+            FontFamily = PclUi.Font,
+            FontSize = 11.5,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 9, 0, 0)
+        };
+        updateLinks.Inlines.Add(PclUi.Link("GitHub 仓库", UpdateChecker.RepositoryUrl, 11.5));
+        updateLinks.Inlines.Add(new Run("  ·  ") { Foreground = PclUi.MutedBrush });
+        updateLinks.Inlines.Add(PclUi.Link("发布页与更新记录", UpdateChecker.ReleasesUrl, 11.5));
+        updateBody.Children.Add(updateLinks);
 
         var scope = PclUi.Label(
             "范围声明：本工具只解锁下载与联机入口，不会解锁、破解或绕过任何赞助（捐赠 / 爱发电）相关内容与权益。",
@@ -149,6 +217,10 @@ public partial class MainWindow : Window
         creditsBody.Children.Add(sponsorNote);
         creditsBody.Children.Add(PclUi.LinkLine("PCL 项目 / 源代码", "https://github.com/Meloong-Git/PCL"));
         creditsBody.Children.Add(PclUi.LinkLine("PCL 分发有限许可 / 合理使用指南", "https://github.com/Meloong-Git/PCL/blob/main/LICENCE"));
+
+        creditsBody.Children.Add(PclUi.Separator(7, 6));
+        creditsBody.Children.Add(PclUi.LinkLine("本工具 GitHub 仓库（源码 / Issues）", UpdateChecker.RepositoryUrl));
+        creditsBody.Children.Add(PclUi.LinkLine("GitHub 发布页（下载 / 更新记录）", UpdateChecker.ReleasesUrl));
 
         var licenseInfo = PclUi.Label(
             "本工具原创代码以 MIT 许可发布：可自由使用、修改与再分发，保留版权与许可声明即可。PclTheme.xaml、PCL 控件与字体不在 MIT 范围内，权利归龙腾猫跃及 PCL 项目；补丁后的 PCL 仍受 PCL 许可约束，请勿分发。完整条款见项目仓库的 LICENSE、NOTICE 与 DISCLAIMER.md。",

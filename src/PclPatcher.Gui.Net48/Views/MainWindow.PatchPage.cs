@@ -302,7 +302,7 @@ public partial class MainWindow : Window
         envBody.Children.Add(PclUi.Separator(5, 5));
         envBody.Children.Add(EnvRow("校验方式", "SHA-256 + 指纹", PclUi.Ink));
         envBody.Children.Add(PclUi.Separator(5, 5));
-        envBody.Children.Add(EnvRow("网络", "无需联网", PclUi.Ink));
+        envBody.Children.Add(EnvRow("网络", "检查更新时联网", PclUi.Ink));
         _rightStack.Children.Add(_envCard);
 
         return root;

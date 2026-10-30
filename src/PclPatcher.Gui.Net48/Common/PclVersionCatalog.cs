@@ -9,7 +9,7 @@ namespace PclPatcher.Gui.Net48;
 internal sealed class PclBuildProfile
 {
     public PclBuildProfile(string version, string sha256, int fingerprintCount, string channel, string label,
-        bool verified, string built)
+        bool verified, string built, bool auto = false)
     {
         Version = version;
         Sha256 = sha256;
@@ -18,6 +18,7 @@ internal sealed class PclBuildProfile
         Label = string.IsNullOrEmpty(label) ? version : label;
         Verified = verified;
         Built = built;
+        Auto = auto;
     }
 
     public string Version { get; }
@@ -34,6 +35,11 @@ internal sealed class PclBuildProfile
 
     /// <summary>True when this project patched and launched the build itself.</summary>
     public bool Verified { get; }
+
+    /// <summary>True when the patcher recorded this build itself after a forced
+    /// in-place patch; such a build is never verified, it only saves the next run
+    /// from asking for --force again.</summary>
+    public bool Auto { get; }
 
     public string Built { get; }
 
@@ -54,11 +60,13 @@ internal sealed class PclVersionCatalog
     public const string UnknownBuildLabel = "未识别版本";
 
     private readonly List<PclBuildProfile> _profiles;
+    private readonly string? _supportRange;
 
-    private PclVersionCatalog(List<PclBuildProfile> profiles, bool supportsProbe)
+    private PclVersionCatalog(List<PclBuildProfile> profiles, bool supportsProbe, string? supportRange = null)
     {
         _profiles = profiles;
         SupportsProbe = supportsProbe;
+        _supportRange = supportRange;
     }
 
     public static PclVersionCatalog Empty { get; } = new PclVersionCatalog(new List<PclBuildProfile>(), false);
@@ -74,10 +82,31 @@ internal sealed class PclVersionCatalog
     /// </summary>
     public bool SupportsProbe { get; }
 
-    public string MinimumVersion => IsLoaded ? _profiles[0].Version : string.Empty;
+    /// <summary>
+    /// Oldest supported build. Derived from the patcher's support line when it is
+    /// available, so an auto-adopted older build cannot lower the version the
+    /// locator accepts (the support line is fixed to the built-in table).
+    /// </summary>
+    public string MinimumVersion
+    {
+        get
+        {
+            if (!IsLoaded) return string.Empty;
+            if (!string.IsNullOrEmpty(_supportRange))
+            {
+                var range = _supportRange!.TrimEnd('+');
+                if (Version.TryParse(range, out _)) return range;
+            }
+            return _profiles[0].Version;
+        }
+    }
 
-    /// <summary>Compact label for the version row and badges, e.g. "2.99.0.0+".</summary>
-    public string SupportLabel => IsLoaded ? MinimumVersion + "+" : UnknownLabel;
+    /// <summary>
+    /// Compact label for the version row and badges, e.g. "2.99.0.0+". The
+    /// patcher's own support line wins: an adopted build older than the oldest
+    /// supported one must not rewrite the advertised range.
+    /// </summary>
+    public string SupportLabel => IsLoaded ? SupportDescription : UnknownLabel;
 
     /// <summary>
     /// Which build label the version row should show for a source file. The
@@ -92,7 +121,10 @@ internal sealed class PclVersionCatalog
     }
 
     /// <summary>Human readable range, e.g. "2.99.0.0+".</summary>
-    public string SupportDescription => IsLoaded ? MinimumVersion + "+" : "受支持的 PCL 版本";
+    public string SupportDescription =>
+        !IsLoaded
+            ? "受支持的 PCL 版本"
+            : (string.IsNullOrEmpty(_supportRange) ? MinimumVersion + "+" : _supportRange!);
 
     public string DetailText
     {
@@ -101,8 +133,9 @@ internal sealed class PclVersionCatalog
             if (!IsLoaded)
                 return "未能从 PclPatcher 读取版本列表；补丁时仍会由 patcher 校验 SHA-256 与方法指纹。";
 
-            var versions = string.Join("、", _profiles.ConvertAll(p => p.Label).ToArray());
-            return "支持 " + SupportDescription + "。已收录：" + versions + "。";
+            var versions = string.Join("、", _profiles.ConvertAll(p => p.Label + (p.Auto ? "*" : string.Empty)).ToArray());
+            var autoNote = _profiles.Exists(p => p.Auto) ? "（* 为工具自动收录，未验证）" : string.Empty;
+            return "支持 " + SupportDescription + "。已收录：" + versions + "。" + autoNote;
         }
     }
 
@@ -130,6 +163,7 @@ internal sealed class PclVersionCatalog
 
         var profiles = new List<PclBuildProfile>();
         var supportsProbe = false;
+        var supportRange = string.Empty;
         foreach (var raw in output!.Split('\n'))
         {
             var fields = raw.TrimEnd('\r').Split('\t');
@@ -137,6 +171,11 @@ internal sealed class PclVersionCatalog
             {
                 if (string.Equals(fields[1].Trim(), "probe", StringComparison.OrdinalIgnoreCase))
                     supportsProbe = true;
+                continue;
+            }
+            if (fields.Length > 1 && string.Equals(fields[0], "support", StringComparison.Ordinal))
+            {
+                supportRange = fields[1].Trim();
                 continue;
             }
             if (fields.Length < 4) continue;
@@ -152,11 +191,12 @@ internal sealed class PclVersionCatalog
             var label = fields.Length > 5 ? fields[5].Trim() : version;
             var verified = fields.Length > 6 && fields[6].Trim() == "1";
             var built = fields.Length > 7 ? fields[7].Trim() : string.Empty;
-            profiles.Add(new PclBuildProfile(version, sha256, fingerprints, channel, label, verified, built));
+            var auto = fields.Length > 8 && fields[8].Trim() == "1";
+            profiles.Add(new PclBuildProfile(version, sha256, fingerprints, channel, label, verified, built, auto));
         }
 
         profiles.Sort((a, b) => CompareVersions(a, b));
-        return profiles.Count == 0 ? Empty : new PclVersionCatalog(profiles, supportsProbe);
+        return profiles.Count == 0 ? Empty : new PclVersionCatalog(profiles, supportsProbe, supportRange);
     }
 
     private static int CompareVersions(PclBuildProfile left, PclBuildProfile right)

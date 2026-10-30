@@ -363,6 +363,7 @@ public partial class MainWindow : Window
     {
         var generation = ++_infoGeneration;
         _structuralLabel = null;
+        _closestLabel = null;
         _ = RefreshStepProbeAsync(path);
         SetSourceStrip("正在校验文件…", "校验中", PclUi.Accent,
             Color.FromRgb(0xEA, 0xF2, 0xFE), Color.FromRgb(0xE8, 0xF1, 0xFF), PclUi.Accent);
@@ -419,12 +420,16 @@ public partial class MainWindow : Window
             // Unlisted hash: ask the patcher whether the anchor methods still
             // match a known build. Snapshot (快照版) rebuilds change the bytes but
             // keep the code shape, so this is what lets them patch without the
-            // "允许未知版本" escape hatch.
+            // "允许未知版本" escape hatch. The same answer also says which build
+            // the file resembles most, so a mismatch can explain itself.
             _structuralLabel = null;
+            _closestLabel = null;
             if (_catalog.IsLoaded && !_lastKnown && !_lastBackupKnown)
             {
-                _structuralLabel = await IdentifyStructuralAsync(path).ConfigureAwait(true);
+                var identified = await IdentifyAsync(path).ConfigureAwait(true);
                 if (generation != _infoGeneration) return;
+                _structuralLabel = identified.Structural;
+                _closestLabel = identified.Closest;
             }
 
             SyncVersionSelection();
@@ -447,6 +452,7 @@ public partial class MainWindow : Window
             _lastHash = null;
             _lastKnown = false;
             _structuralLabel = null;
+            _closestLabel = null;
             SyncVersionSelection();
             ResetBackupState();
             RefreshLaunchReadiness();
@@ -498,6 +504,10 @@ public partial class MainWindow : Window
             return;
         }
 
+        // Nothing matched: say which build it is closest to, so "哈希不符" is an
+        // answer instead of a dead end. --force remains the only way to patch.
+        if (!string.IsNullOrEmpty(_closestLabel))
+            meta += " · 最接近 " + _closestLabel;
         var allowed = _forceBox?.Checked == true;
         SetSourceStrip(
             meta,

@@ -10,15 +10,65 @@ internal static partial class Program
     /// Machine readable per-step report used by the GUI when a file is selected:
     /// every step of the current option set with its Probe state, without
     /// touching the file. Unlike <c>--adopt</c> it needs no profile match, so an
-    /// unlisted build still shows which steps are applicable.
+    /// unlisted build still shows which steps are applicable. The same run also
+    /// reports the build identity (hash, channel, match, closest) because loading
+    /// the module is the expensive part and the GUI needs both answers.
     /// </summary>
     private static int ReportProbes(string source, bool includeLink, bool noUpdate)
     {
         if (!File.Exists(source)) throw new FileNotFoundException("source not found", source);
 
+        var version = FileVersionInfo.GetVersionInfo(source).FileVersion ?? "<unknown>";
+        var hash = Sha256(source);
+        var channel = DetectChannel(source, version);
+
         using var module = ModuleDefMD.Load(source);
-        Console.WriteLine("probe\t1");
-        Console.WriteLine($"version\t{FileVersionInfo.GetVersionInfo(source).FileVersion ?? "<unknown>"}");
+        var profile = Profiles.FirstOrDefault(p => p.Sha256 == hash);
+        var match = profile is not null ? "exact" : "unknown";
+        var matchedProfile = profile;
+        PclProfile? structural = null;
+        ClosestMatch? closest = null;
+
+        if (profile is null)
+        {
+            structural = MatchByFingerprints(module, channel, out closest, quiet: true);
+            if (structural is not null)
+            {
+                match = "structural";
+                matchedProfile = structural;
+            }
+            else if (closest is not null && closest.Matched == 0)
+            {
+                closest = null;
+            }
+        }
+
+        // A patched copy carries this tool's IL shapes and a .bak that may still
+        // be a known build; identifying it as "patched" keeps the GUI from
+        // offering a mismatch dialog for a file that is simply already done.
+        if (profile is null && structural is null && LooksPatched(module))
+        {
+            var backup = source + BackupSuffix;
+            if (File.Exists(backup))
+            {
+                var backupProfile = Profiles.FirstOrDefault(p => p.Sha256 == Sha256(backup));
+                if (backupProfile is not null)
+                {
+                    match = "patched";
+                    matchedProfile = backupProfile;
+                }
+            }
+        }
+
+        Console.WriteLine("probe\t2");
+        Console.WriteLine($"version\t{version}");
+        Console.WriteLine($"sha256\t{hash}");
+        Console.WriteLine($"channel\t{matchedProfile?.Channel ?? channel}");
+        Console.WriteLine($"match\t{match}");
+        Console.WriteLine($"profile\t{matchedProfile?.Label ?? string.Empty}");
+        Console.WriteLine(
+            $"closest\t{closest?.Profile.Label ?? string.Empty}\t" +
+            $"{(closest is null ? string.Empty : closest.Matched + "/" + closest.Total)}");
         foreach (var step in BuildPlan(noUpdate, includeLink))
         {
             string state;

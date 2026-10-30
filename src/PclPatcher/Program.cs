@@ -47,7 +47,10 @@ internal static partial class Program
 
     private static int Run(string[] args)
     {
-        Console.WriteLine("PclPatcher 1.1.1 · 第三方 IL 补丁工具");
+        // Version comes from Directory.Build.props so the banner cannot drift
+        // away from the binaries (the GUI shows the same number on its About page).
+        var version = typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+        Console.WriteLine($"PclPatcher {version} · 第三方 IL 补丁工具");
         Console.WriteLine("Some birds aren't meant to be caged. Their feathers are just too bright.");
         Console.WriteLine("And when they fly away, the part of you that knows it was a sin to lock them up does rejoice.");
         Console.WriteLine();
@@ -60,6 +63,7 @@ internal static partial class Program
         var backup = GetBackupPath(source);
         var dryRun = args.Contains("--dry-run");
         var force = args.Contains("--force");
+        var allowDowngrade = args.Contains("--allow-downgrade");
         var noUpdate = args.Contains("--no-update");
         var downloadOnly = args.Contains("--download-only");
         var allowPartial = args.Contains("--allow-partial");
@@ -88,7 +92,7 @@ internal static partial class Program
         // original, then patch once" flow, but it never leaves a window where the
         // source is restored-only: the backup is the patch input and the source is
         // replaced once at the end.
-        var patchedProfile = DetectPatchedSource(source, sourceHash, backup, force);
+        var patchedProfile = DetectPatchedSource(source, sourceHash, backup, allowDowngrade);
         var basePath = patchedProfile is null ? source : backup;
         var baseHash = patchedProfile?.Sha256 ?? sourceHash;
 
@@ -96,6 +100,10 @@ internal static partial class Program
         var resolution = ResolveBuild(module, basePath, baseHash, backup, force, dryRun);
         var profile = resolution.Profile;
         var sourceIsKnownOriginal = resolution.IsKnownOriginal;
+        // Captured before any step mutates the module: only a pristine base may be
+        // recorded as an unverified profile below. An old patch product is not an
+        // original, and recording it would make --restore restore a patched file.
+        var baseWasPristine = !LooksPatched(module);
 
         Console.WriteLine($"source : {source}");
         if (patchedProfile is not null)
@@ -118,6 +126,7 @@ internal static partial class Program
             Console.WriteLine("fp     : skipped (source is already patched; backup matches a known build)");
 
         var pending = new List<PatchStep>();
+        var skipped = new List<string>();
         foreach (var step in plan)
         {
             var probe = step.Probe(module);
@@ -133,6 +142,7 @@ internal static partial class Program
                     throw new InvalidOperationException(
                         $"{step.Name}: {probe.Reason}. Pass --allow-partial to skip this step.");
                 Console.WriteLine($"probe  : {step.Name,-28} SKIP ({probe.Reason})");
+                skipped.Add(step.Name);
                 continue;
             }
 
@@ -186,9 +196,24 @@ internal static partial class Program
         if (inPlace && applied.Count == 0)
         {
             Console.WriteLine();
+            if (skipped.Count > 0)
+            {
+                // "Nothing written" is not the same as "already patched": with
+                // --force --allow-partial every anchor can be missing, and
+                // claiming success there made a broken run look like a no-op.
+                Console.WriteLine($"noop   : 0 of {plan.Count} steps applied; skipped {skipped.Count}: " +
+                                  string.Join(", ", skipped));
+                Console.WriteLine("         Nothing was written. Check the anchors above, or retry without --allow-partial.");
+                return 2;
+            }
+
             Console.WriteLine("already: source is already patched; nothing written");
             return 0;
         }
+
+        if (!inPlace && applied.Count == 0)
+            Console.WriteLine($"WARN   : 0 of {plan.Count} steps applied; the output is an unmodified copy " +
+                              $"({skipped.Count} step(s) skipped)");
 
         var temp = output + ".tmp";
         try
@@ -209,6 +234,14 @@ internal static partial class Program
                 // the right one and must be reused instead of reported as stale.
                 PrepareBackup(source, backup, baseHash, sourceIsKnownOriginal);
                 ReplaceFile(temp, output);
+
+                // A forced patch of an unlisted build leaves a .bak no profile
+                // knows, which would make the next run ask for --force again and
+                // leave --restore without a known base. Record the build patched
+                // from (never a stale .bak or an already patched source) as
+                // unverified.
+                if (resolution.Match == "forced" && baseWasPristine)
+                    TryRememberOriginal(backup, baseHash);
             }
             else
             {
@@ -230,13 +263,14 @@ internal static partial class Program
 
     /// <summary>
     /// Tab separated profile list consumed by the GUIs. The number after the
-    /// "profiles" tag is the format version (4 = added the feature handshake),
-    /// not the build count. Header/tag lines keep the format self-describing, and
-    /// extra fields/lines can be added without breaking the parser in PclVersionCatalog.
+    /// "profiles" tag is the format version (5 = added the auto-adopt flag;
+    /// 4 = added the feature handshake), not the build count. Header/tag lines
+    /// keep the format self-describing, and extra fields/lines can be added
+    /// without breaking the parser in PclVersionCatalog.
     /// </summary>
     private static void PrintProfiles()
     {
-        Console.WriteLine("profiles\t4");
+        Console.WriteLine("profiles\t5");
         // A GUI must not call --probe on a patcher that predates it: the old
         // parser ignores unknown switches, so it would start a normal in-place
         // patch instead. The handshake makes --probe opt-in.
@@ -244,7 +278,7 @@ internal static partial class Program
         foreach (var profile in Profiles)
             Console.WriteLine(
                 $"profile\t{profile.Version}\t{profile.Sha256}\t{profile.Fingerprints.Count}\t{profile.Channel}\t{profile.Label}\t" +
-                $"{(profile.Verified ? 1 : 0)}\t{profile.Built}");
+                $"{(profile.Verified ? 1 : 0)}\t{profile.Built}\t{(profile.Auto ? 1 : 0)}");
         Console.WriteLine($"support\t{SupportedRange}");
     }
 
@@ -253,8 +287,9 @@ internal static partial class Program
         var source = args.FirstOrDefault(a => !a.StartsWith("--", StringComparison.Ordinal));
         if (source is null)
             throw new InvalidOperationException(
-                "usage: PclPatcher <PCL.exe> [output.exe] [--restore] [--dry-run] [--force] [--allow-partial] " +
-                "[--download-only] [--no-update] [--no-stop] [--fingerprints] [--identify] [--adopt] [--probe] [--profiles]");
+                "usage: PclPatcher <PCL.exe> [output.exe] [--restore] [--dry-run] [--force] [--allow-downgrade] " +
+                "[--allow-partial] [--download-only] [--no-update] [--no-stop] [--fingerprints] [--identify] " +
+                "[--adopt] [--probe] [--profiles]");
         return Path.GetFullPath(source);
     }
 
