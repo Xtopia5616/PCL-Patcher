@@ -46,7 +46,7 @@ internal static partial class Program
     };
 
     // Ordered from oldest to newest; the first entry defines the displayed range.
-    // 2.99.0.0 exists twice on purpose: the release build and the 2026-10-29
+    // 2.99.0.0 and 2.99.0.1 exist twice on purpose: the release build and the
     // snapshot share all seven fingerprints but are different binaries.
     private static readonly PclProfile[] BuiltInProfiles =
     {
@@ -92,7 +92,22 @@ internal static partial class Program
                 ["PCL.PageInstanceModDisabled::BtnDownload_Loaded/0"] = "2b04d8e7d19c7058",
                 ["PCL.PageLaunchLeft::RefreshButtonsUI/0"] = "0252d318cd8fb776"
             },
-            Built: "2026-10-25")
+            Built: "2026-10-25"),
+        new(
+            "2.99.0.1",
+            "2749aa5de361ff35a857dd0ca6ba4b0c8aecaa68fedeac413f54ce3899dba453",
+            new Dictionary<string, string>
+            {
+                ["PCL.PageDownloadLeft::.ctor/0"] = "2c6c63d4e200f5ad",
+                ["PCL.PageDownloadInstall::LoaderInit/0"] = "7b1ab7c438aa084f",
+                ["PCL.ModModpack::ModpackInstall/3"] = "ac01defe0958b4e5",
+                ["PCL.PageSelectLeft::McFolderListUI/0"] = "65a2299afca76eda",
+                ["PCL.PageDownloadResourceDetail::InitializeStackResourceVersions/1"] = "4d8b2fe8b97c1662",
+                ["PCL.PageInstanceModDisabled::BtnDownload_Loaded/0"] = "2b04d8e7d19c7058",
+                ["PCL.PageLaunchLeft::RefreshButtonsUI/0"] = "0252d318cd8fb776"
+            },
+            Channel: "snapshot",
+            Built: "2026-10-30")
     };
 
     /// <summary>

@@ -54,7 +54,8 @@ PCL.ModSecret::RestrictMcDownload  literal=True  const=True
 | `LinkPrecheckCustomPeer` | 在“创建房间/加入房间”入口先检查 `LinkCustomPeer`，为空时直接提示，不再先弹端口/邀请码输入框 |
 | `LinkNoticeText` | `PageLinkMain.InitializeComponent` 加载后把联机页的示例文本按钮改成节点停服/自建说明 |
 | `LinkPeerHint` | `PageSetupLink.InitializeComponent` 加载后改写“自定义节点”输入框的 ToolTip（原文案还在推荐已停服的公共节点） |
-| `DisableSelfUpdate` | 可选 `--no-update`：把 `ModSecret.UpdateStart` 直接 `ret`，防止更新器覆盖补丁（GUI 默认勾选“禁用更新”） |
+| `ForceFullPackage` | 默认：把更新入口改成强制走 `DownloadUrls` 整包，绕开按本地 exe MD5 命名的增量补丁 URL（打补丁后该 URL 必然 404） |
+| `DisableSelfUpdate` | 可选 `--no-update`：把 `ModSecret.UpdateStart` 直接 `ret`，彻底关闭自更新（此时不再应用 `ForceFullPackage`） |
 
 `RestoreLinkEntry` 起七个联机步骤只有在启用联机范围时才加入 PatchPlan；
 `--download-only` 会跳过它们，不会触碰 `PageLinkMain` / `PageSetupUI`。
@@ -139,13 +140,17 @@ PCL 的快照版（快照版渠道）和正式版**共用数字版本号**：快
 `程序版本：快照版 2.99.0.0`，但 `FileVersion` 还是 `2.99.0.0`。因此指纹表里
 `2.99.0.0` 有两条 profile：正式版与 2026-10-29 快照版，靠 `Channel` 区分。
 
-构建身份按三段解析（`BuildIdentity.cs`）：
+构建身份按四段解析（`BuildIdentity.cs` / `FileOperations.ResolveBuild`）：
 
 | 顺序 | 判据 | 结果 | 是否需要 `--force` |
 |---|---|---|---|
 | 1 | SHA-256 命中 profile | `exact`，用该 profile 的指纹复核 | 否 |
 | 2 | 7 个锚点方法指纹全部命中某个 profile | `structural`，按该版本方案补丁 | 否 |
-| 3 | 都不命中 | `unknown` | 是（GUI：允许未知版本） |
+| 3 | 同目录 `.bak` 命中 profile **且** 源文件带本工具的补丁形状（`LooksPatched`） | `patched`，从 `.bak` 原版重打 | 否 |
+| 4 | 都不命中 | `unknown` | 是（GUI：允许未知版本） |
+
+第 2 段排在第 3 段前是有意的：锚点指纹扛得住“重新构建”，扛不住“打补丁”，
+所以先证伪“已补丁”再谈备份，见 §2.3。
 
 快照重建通常只改时间戳/资源/非锚点代码，锚点指纹不变，于是第 2 段直接放行——
 这就是“后续所有快照版不用改代码也能打”的机制。第 2 段仍然要过全部 `Probe`、
@@ -185,6 +190,50 @@ GUI 对未收录的构建会先跑一次 `PclPatcher --identify`：返回 `match
 时版本行显示“2.99.0.0 快照版（结构匹配）”，可以直接开始补丁，不需要勾选
 “允许未知版本”。只有 `match=unknown` 才会弹“版本不匹配”。
 
+### 2.3 自更新之后 `.bak` 失配（快照 0.0 → 0.1 实测）
+
+PCL 的检查更新会**原地替换 exe**，但不会动 `PclPatcher` 生成的 `.bak`，于是升级后
+本机状态是“新官方 exe + 旧原版 `.bak`”：
+
+```text
+Plain Craft Launcher 2.exe      2.99.0.1 快照版 (416)   6,019,072   ← 官方新构建
+Plain Craft Launcher 2.exe.bak  2.99.0.0 快照版 (414)   5,985,280   ← 上一代的原版
+```
+
+旧逻辑把“源文件哈希未知 + `.bak` 命中 profile”直接当成“源文件已补丁”，于是在
+0.1 上出现三处错误：
+
+1. 报告 `fp : skipped (source is already patched)`，7 个锚点指纹没有复核；
+2. 用 0.0 的 profile 解析 0.1 的文件；
+3. 写盘时 `PrepareBackup` 认为 `.bak` 不该被覆盖，**保留 0.0 的备份**——此后
+   `--restore` 或改选项重打都会把启动器悄悄降级回 0.0。
+
+修复分三层，都在“先证伪，再相信备份”这个前提上：
+
+| 位置 | 修复 |
+|---|---|
+| `ResolveBuild` | 结构指纹判定移到 `.bak` 之前；`.bak` 分支额外要求 `LooksPatched(module)`，否则打印 `ignoring the backup` 继续走指纹 |
+| `DetectPatchedSource` | 已经过 `LooksPatched`，再加版本闸门：源文件与 `.bak` 的 `FileVersion` 不同就拒绝（`--force` 才降级），提示先放回对应版本的完整包 |
+| `PrepareBackup` | 源文件是已验证原版（`exact` / `structural`）而 `.bak` 哈希不同 → 判定为过期备份，刷新为当前版本 |
+
+`--restore` 也补了一句 `WARN`：备份版本与源文件不同时明确写出“还原会降级到备份版本”，
+因为从 0.1 还原到 0.0 是合法操作，但不该静默发生。
+
+修复后同一条命令在升级后的目录里输出：
+
+```text
+version: 2.99.0.1
+build  : 2.99.0.1 快照版
+match  : exact sha256 → 2.99.0.1 快照版        # 收录该构建之后；未收录时是 structural
+fp     : all 7 known method fingerprints match
+backup : refreshing stale backup …\Plain Craft Launcher 2.exe.bak
+written: …\Plain Craft Launcher 2.exe
+```
+
+快照 0.1（构建 416）的 7 个锚点指纹与 2.99.0.1 正式版**完全相同**，所以它既是
+“结构匹配”的样本，也被收进 profile 变成 `exact`；构建号 416 来自启动日志
+`程序版本：快照版 2.99.0.1 (416)`。
+
 
 ## 3. 补丁流程
 
@@ -206,6 +255,7 @@ GUI 对未收录的构建会先跑一次 `PclPatcher --identify`：返回 `match
 | `LinkNoticeText` | 替换联机页示例文本为节点说明（联机组） |
 | `LinkPeerHint` | 改写“设置 → 联机 → 自定义节点”的悬停说明（联机组） |
 | `LinkPeerButtons` | 隐藏“节点状态”按钮，把“贡献节点”按钮换成 EasyTier 官网链接（联机组） |
+| `ForceFullPackage` | 更新走完整包（默认启用，`--no-update` 时跳过） |
 
 成功日志：
 
@@ -425,6 +475,12 @@ dotnet build .\src\PclPatcher\PclPatcher.csproj -c Release
 对已打补丁的文件再次运行会先从 `.bak` 还原原版，再按当前参数重新补丁：这样改过
 `--download-only` / `--no-update` 后不会把新选项叠在旧补丁上，`.bak` 也不会被覆盖。
 
+升级过 PCL 之后这条规则换成另一种表现：`.bak` 是旧版本、源文件是新官方原版，
+此时不打补丁就不会动 `.bak`；一旦补丁新版本，旧备份被判定为过期并刷新为新版本
+（`backup : refreshing stale backup`），避免之后还原或重打把启动器降级。若源文件
+已经是补丁状态而 `.bak` 版本不同（旧 patcher 留下的状态），直接拒绝并以
+`--force` 作为显式降级开关。
+
 还原：
 
 ```powershell
@@ -590,11 +646,15 @@ Patcher 内置：
 
 - 源文件版本 + SHA-256 白名单（`--force` 可绕过）；
 - 临时文件写入 → 重新加载 → 逐步骤 Verify → 备份原文件并校验 → 原子替换；
-- 备份只在需要时创建：已有 `.bak` 不覆盖；源文件是已知原版而备份过期时才刷新；
+- 备份只在需要时创建：已有 `.bak` 不覆盖；源文件是已知原版而备份过期时才刷新，
+  版本升级留下的旧 `.bak` 因此在第一次补丁新版本时被换掉（§2.3）；
 - `--restore` 先校验备份的 SHA-256 与 `PCL.ModMain` 类型，再经临时文件原子还原；
+  备份版本与源文件不同时会打印“还原会降级”的 `WARN`；
 - 已打补丁的文件再次运行会从 `.bak` 原版重新补丁，不叠加旧补丁；`.bak` 原样保留；
   “已补丁”必须同时满足“源文件哈希未知 + `.bak` 是已知原版 + 三个必选下载锚点已是
   补丁形状”，避免把“新 PCL 旁边留着旧 `.bak`”误当成补丁产物而被还原成旧版本；
+  `ResolveBuild` 与 `DetectPatchedSource` 两处都走这条判据，且 `.bak` 的版本号必须与
+  源文件一致，否则拒绝重打（`--force` 才接受降级）；
 - `MaxStackCalculator` 计算最大栈深；
 - 全模块 IL 校验：分支/switch 目标、异常处理边界、空方法体；
 - 参数索引校验：`ldarg.*` 超出方法实参槽位（典型是往静态方法里塞 `ldarg.0`）立即中止——
@@ -617,7 +677,7 @@ Copy-Item "D:\Minecraft\Plain Craft Launcher 2.exe" .\PCL-inplace.exe
 ```
 
 GUI 的手工回归：拖入副本 → 右侧流程应先逐项显示状态（原版为“待应用”）→ 开始补丁 →
-日志页应依次出现 13 个 `patch :` 步骤（`--no-update` 时为 14 个）与
+日志页应依次出现 14 个 `patch :` 步骤（`--no-update` 时最后一步换成 `DisableSelfUpdate`，同样 14 个）与
 `verify : output reloaded`；再点“还原备份”，源文件 SHA-256 应回到原始值，
 右侧重新探测后应回到“待应用”。
 
@@ -708,6 +768,7 @@ Patcher 只改 code-behind 里对 UI 属性的赋值：
 - 许可与免责：本项目原创代码以 [MIT](LICENSE) 发布（PCL 派生文件除外），完整风险提示见
   [DISCLAIMER.md](DISCLAIMER.md)；补丁后的 PCL 属于修改版，不得再分发。中国大陆的
   游戏出版/进口/运营政策与 PCL 许可限制见该文第 4 节。
+
 
 
 

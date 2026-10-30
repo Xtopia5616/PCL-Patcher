@@ -67,6 +67,7 @@ internal sealed class StepPanel : StackPanel
         Add("LinkNoticeText", "替换联机提示", "示例文本 → 节点说明");
         Add("LinkPeerHint", "改写节点说明", "自定义节点悬停文案");
         Add("LinkPeerButtons", "修正节点按钮", "隐藏状态 / 官网链接");
+        Add("ForceFullPackage", "强制完整包更新", "绕过 {pcl_md5} 补丁包");
         Add("DisableSelfUpdate", "禁用自更新", "ModSecret.UpdateStart");
     }
 
@@ -163,7 +164,9 @@ internal sealed class StepPanel : StackPanel
     }
 
     private bool IsDisabled(StepRow row) =>
-        (!_link && IsLink(row.Key)) || (row.Key == "DisableSelfUpdate" && !_noUpdate);
+        (!_link && IsLink(row.Key)) ||
+        (row.Key == "DisableSelfUpdate" && !_noUpdate) ||
+        (row.Key == "ForceFullPackage" && _noUpdate);
 
     public void ActivateFirst()
     {

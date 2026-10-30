@@ -168,10 +168,11 @@ public partial class MainWindow : Window
         _leftStack.Children.Add(optionCard);
 
         _dryRunBox = AddOption(optionBody, "只探测", "校验并打印结果，不写出文件", true);
-        _noUpdateBox = AddOption(optionBody, "禁用更新", "关闭 PCL 自更新，避免更新覆盖补丁（默认开启）", true);
-        // A patched build must not be replaced by the official updater on first
-        // launch; that is exactly how a patched 2.99.0.0 turns back into 2.99.0.1.
-        _noUpdateBox.Checked = true;
+        _noUpdateBox = AddOption(optionBody, "禁用更新", "彻底关闭 PCL 自更新；不勾选时更新改走完整包，补丁会被官方版覆盖", true);
+        // ForceFullPackage keeps the updater usable (the MD5-based patch URL
+        // would 404 after patching), so auto-update stays on by default; the
+        // patch itself is gone once the launcher replaces its own exe.
+        _noUpdateBox.Checked = false;
         _linkUnlockBox = AddOption(optionBody, "同时解锁联机", "勾选：下载 + 联机；不勾选：仅解锁下载", true);
         _linkUnlockBox.Checked = true;
         _stopPclBox = AddOption(optionBody, "自动退出 PCL", "补丁/还原前结束正在运行的 PCL", true);
@@ -377,3 +378,5 @@ public partial class MainWindow : Window
         return row;
     }
 }
+
+

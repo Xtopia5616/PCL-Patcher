@@ -212,6 +212,23 @@ internal static partial class Program
         return new(PatchState.Missing, "ModpackInstall shape mismatch");
     }
 
+    private static ProbeResult ProbeForceFullPackage(ModuleDef module)
+    {
+        try
+        {
+            var (method, branch) = FindUpdateRoute(module, allowPatched: true);
+            if (branch.OpCode == OpCodes.Br || branch.OpCode == OpCodes.Br_S)
+                return TargetsDownloadUrls(branch, method.Body)
+                    ? new(PatchState.AlreadyPatched, "updater already routed to DownloadUrls")
+                    : new(PatchState.Missing, "unconditional branch does not target DownloadUrls");
+            return new(PatchState.Ready, "UpdateMark gateway found");
+        }
+        catch (InvalidOperationException ex)
+        {
+            return new(PatchState.Missing, ex.Message);
+        }
+    }
+
     private static ProbeResult ProbeDisableSelfUpdate(ModuleDef module)
     {
         var method = FindMethod(FindType(module, "PCL.ModSecret"), "UpdateStart");

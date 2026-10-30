@@ -12,7 +12,7 @@ internal static partial class Program
     /// and rebuilding that from the backup would silently downgrade the launcher.
     /// The patched IL shapes have to confirm it (see <see cref="LooksPatched"/>).
     /// </summary>
-    private static PclProfile? DetectPatchedSource(string source, string sourceHash, string backup)
+    private static PclProfile? DetectPatchedSource(string source, string sourceHash, string backup, bool force)
     {
         if (Profiles.Any(p => p.Sha256 == sourceHash)) return null;
 
@@ -22,8 +22,10 @@ internal static partial class Program
 
         try
         {
-            using var module = ModuleDefMD.Load(source);
-            return LooksPatched(module) ? backupProfile : null;
+            using (var module = ModuleDefMD.Load(source))
+            {
+                if (!LooksPatched(module)) return null;
+            }
         }
         catch (Exception)
         {
@@ -31,14 +33,36 @@ internal static partial class Program
             // report it instead of guessing here.
             return null;
         }
+
+        // A patched source can still sit next to a backup from an older build:
+        // PCL's self-update replaces the exe in place and leaves .bak behind, so
+        // "patched 2.99.0.1 + .bak 2.99.0.0" is what a launcher updated after
+        // patching looks like. Rebuilding from that backup silently downgrades
+        // the launcher, so refuse unless the downgrade is explicit.
+        var sourceVersion = FileVersionInfo.GetVersionInfo(source).FileVersion;
+        var backupVersion = FileVersionInfo.GetVersionInfo(backup).FileVersion;
+        if (!string.Equals(sourceVersion, backupVersion, StringComparison.OrdinalIgnoreCase))
+        {
+            var message =
+                $"source is patched ({sourceVersion}) but {Path.GetFileName(backup)} is a different build ({backupVersion}); " +
+                "rebuilding from it would downgrade the launcher. Put the pristine " +
+                $"{sourceVersion} build back (PCL: 检查更新 → 下载完整包) and patch again, " +
+                "or pass --force to accept the downgrade.";
+            if (!force) throw new InvalidOperationException(message);
+            Console.WriteLine("WARN   : " + message);
+        }
+
+        return backupProfile;
     }
 
     /// <summary>
     /// Decides which profile a source file follows. Resolution order matters:
-    /// an exact sha256 is the strongest signal; a matching <c>.bak</c> means the
-    /// source is already patched; and a build whose seven anchor fingerprints all
-    /// match a profile is accepted as that profile even when its bytes are new
-    /// (snapshot rebuilds). Only a build that matches nothing needs --force.
+    /// an exact sha256 is the strongest signal; a build whose seven anchors all
+    /// match a profile is that profile even when its bytes are new (snapshot
+    /// rebuilds); a matching <c>.bak</c> plus this tool's own IL shapes means the
+    /// source is already patched. The backup alone proves nothing: PCL's updater
+    /// replaces the exe in place and leaves the old .bak behind, and trusting it
+    /// there rebuilt the new build from the old one (a silent downgrade).
     /// </summary>
     private static BuildResolution ResolveBuild(ModuleDef module, string source, string hash, string backup, bool force, bool dryRun)
     {
@@ -55,24 +79,39 @@ internal static partial class Program
             return new BuildResolution(profile, "exact", channel, true);
         }
 
+        // Probe the anchors before the backup: they survive a snapshot rebuild but
+        // not a patch, so a build that matches all seven is an original even if an
+        // old .bak sits next to it, and a patched copy falls through.
+        var structural = MatchByFingerprints(module, channel, out var matched, out var total);
+        if (structural is not null)
+        {
+            Console.WriteLine($"match  : structural {matched}/{total} fingerprints → {structural.Label} (unlisted build)");
+            if (File.Exists(backup))
+            {
+                var staleProfile = Profiles.FirstOrDefault(p => p.Sha256 == Sha256(backup));
+                Console.WriteLine($"note   : backup {staleProfile?.Label ?? "hash unknown"} is stale; refreshing it with this build");
+            }
+            return new BuildResolution(structural, "structural", channel, true);
+        }
+
         if (File.Exists(backup))
         {
             var backupHash = Sha256(backup);
             var backupProfile = Profiles.FirstOrDefault(p => p.Sha256 == backupHash);
             if (backupProfile is not null)
             {
-                Console.WriteLine($"note   : source sha256 {hash} is not the known original,");
-                Console.WriteLine($"         but backup matches {backupProfile.Label}; treating source as already patched");
-                return new BuildResolution(backupProfile, "patched", channel, false);
+                if (LooksPatched(module))
+                {
+                    Console.WriteLine($"note   : source sha256 {hash} is not the known original,");
+                    Console.WriteLine($"         but backup matches {backupProfile.Label}; treating source as already patched");
+                    return new BuildResolution(backupProfile, "patched", channel, false);
+                }
+                Console.WriteLine($"WARN   : backup matches {backupProfile.Label}, but the source carries no patch of this tool; ignoring the backup");
             }
-            Console.WriteLine($"WARN   : backup exists but its sha256 is unknown ({backupHash})");
-        }
-
-        var structural = MatchByFingerprints(module, channel, out var matched, out var total);
-        if (structural is not null)
-        {
-            Console.WriteLine($"match  : structural {matched}/{total} fingerprints → {structural.Label} (unlisted build)");
-            return new BuildResolution(structural, "structural", channel, true);
+            else
+            {
+                Console.WriteLine($"WARN   : backup exists but its sha256 is unknown ({backupHash})");
+            }
         }
 
         if (force)
@@ -151,8 +190,18 @@ internal static partial class Program
         Console.WriteLine($"backup : {backup}");
         Console.WriteLine($"mode   : restore from backup");
         var backupHash = Sha256(backup);
-        Console.WriteLine($"version: {FileVersionInfo.GetVersionInfo(backup).FileVersion ?? "<unknown>"}");
+        var backupVersion = FileVersionInfo.GetVersionInfo(backup).FileVersion ?? "<unknown>";
+        Console.WriteLine($"version: {backupVersion}");
         Console.WriteLine($"sha256 : {backupHash}");
+
+        // The backup may predate a PCL self-update; restoring it is a downgrade,
+        // which is fine when it is what the user asked for but must be visible.
+        if (File.Exists(source))
+        {
+            var sourceVersion = FileVersionInfo.GetVersionInfo(source).FileVersion ?? "<unknown>";
+            if (!string.Equals(sourceVersion, backupVersion, StringComparison.OrdinalIgnoreCase))
+                Console.WriteLine($"WARN   : 源文件是 {sourceVersion}，备份是 {backupVersion}；还原会降级到备份版本");
+        }
 
         try
         {

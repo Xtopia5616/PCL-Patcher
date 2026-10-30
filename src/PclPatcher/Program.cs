@@ -88,7 +88,7 @@ internal static partial class Program
         // original, then patch once" flow, but it never leaves a window where the
         // source is restored-only: the backup is the patch input and the source is
         // replaced once at the end.
-        var patchedProfile = DetectPatchedSource(source, sourceHash, backup);
+        var patchedProfile = DetectPatchedSource(source, sourceHash, backup, force);
         var basePath = patchedProfile is null ? source : backup;
         var baseHash = patchedProfile?.Sha256 ?? sourceHash;
 
@@ -285,6 +285,12 @@ internal static partial class Program
             plan.Add(new("LinkPeerHint", true, ProbeLinkPeerHint, PatchLinkPeerHint, VerifyLinkPeerHint));
             plan.Add(new("LinkPeerButtons", true, ProbeLinkPeerButtons, PatchLinkPeerButtons, VerifyLinkPeerButtons));
         }
+
+        // Default: keep auto-update usable after patching by routing it to the
+        // full package (the incremental-patch URL embeds the exe MD5, which no
+        // longer matches once the patcher has rewritten the file).
+        if (!noUpdate)
+            plan.Add(new("ForceFullPackage", false, ProbeForceFullPackage, PatchForceFullPackage, VerifyForceFullPackage));
 
         if (noUpdate)
             plan.Add(new("DisableSelfUpdate", true, ProbeDisableSelfUpdate, PatchDisableSelfUpdate, VerifyDisableSelfUpdate));
