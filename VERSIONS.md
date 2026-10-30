@@ -252,7 +252,7 @@ PCL 自己在 2026-10-30 08:53 把本机从 `快照版 2.99.0.0 (414)` 更新到
 ## 6. 复现
 
 ```powershell
-$py = 'C:\Users\olive\.dsh\dsh-runtimes\dsh-primary-runtime\dependencies\python\python.exe'
+$py = 'python'   # 或本机任意 Python 3.8+ 解释器的完整路径
 
 # 下载并解包（默认 2.99.0.0 / main / 2.14.0.0 三个快照）
 & $py .\scripts\fetch_pcl_versions.py
@@ -265,7 +265,7 @@ $py = 'C:\Users\olive\.dsh\dsh-runtimes\dsh-primary-runtime\dependencies\python\
 .\dist\PclPatcher.exe .\.versions\2.99.0.0\'Plain Craft Launcher 2.exe' --dry-run --force --fingerprints
 
 # 快照版：确认渠道与匹配方式（exact / structural）
-.\dist\PclPatcher.exe "C:\Users\olive\Downloads\Mobile Devices\Plain Craft Launcher 2.exe" --identify
+.\dist\PclPatcher.exe "$env:USERPROFILE\Downloads\Plain Craft Launcher 2.exe" --identify   # 换成快照版安装包的实际路径
 
 # 未来版本：打印 profile 条目，并写入外部 profile 文件（GUI 也会跟随）
 .\dist\PclPatcher.exe "新的 PCL.exe" --adopt --save
