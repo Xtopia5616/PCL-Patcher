@@ -354,8 +354,29 @@ Dialogs.SelectFile("选择整合包压缩文件", False, Nothing, Nothing)
 | `ModMinecraft` 更新提示的“下载”按钮 | 找到 `"Minecraft 更新提示"` 后第一个 `ldstr ""`，改成 `"下载"` |
 | `PageInstanceModDisabled.BtnDownload_Loaded` | 重建 `Settings.Get<bool>("UiHiddenPageDownload") + HiddenForceShow + ShowHidden` 条件 |
 | `PageLaunchLeft.RefreshButtonsUI` | 无版本时按 `UiHiddenPageDownload` 决定 state 1/2；不再无条件 1 |
-| `PageDownloadResourceDetail.InitializeStackResourceVersions` | 在版本列表循环里按 `TargetResourceType == ModPack` 选择双委托 `ToListItem(Install_Click, Save_Click, ...)` 或单委托 |
+| `PageDownloadResourceDetail.InitializeStackResourceVersions` | 在版本列表循环里按 `TargetResourceType == ModPack` 选择双委托 `ToListItem(Install_Click, Save_Click, ...)` 或单委托（两个委托类型不同，见下方“同名委托”） |
 | `PageSelectLeft.McFolderListUI` | 在 `stloc.1` 后插入 `PanList.Children.Add(ItemInstall)`，恢复“导入整合包” |
+
+### 5.0 两个同名委托（`ClickEventHandler`）
+
+`ResourceVersion.ToListItem` 的签名是：
+
+```text
+ToListItem(PCL.MyListItem/ClickEventHandler,      ' 整行点击
+           PCL.MyIconButton/ClickEventHandler,    ' 行尾“另存为”图标
+           Boolean)                               ' IsBadDisplay
+```
+
+两个参数是**不同的嵌套类型**，简单名相同、`Invoke` 形状也相同（`(Object, EventArgs)`），
+所以“把调用点里现成的 `newobj ClickEventHandler` 拿来用两次”能通过 dnlib 校验、也能写盘，
+直到行被虚拟化创建时 `MyIconButton.add_Click` 里的 `DirectCast` 才抛
+`InvalidCastException`——这就是 1.1.0 及更早版本“展开整合包版本卡片必崩”的原因
+（2.99.0.0 / 0.1 / 414 / 416 四个构建都中）。
+
+现在的做法：**从 `ToListItem` 的签名取两个参数类型**，分别 `FindMethod(".ctor")` 后各自
+`newobj`；`InspectResourceDetailInstall` 同时把“图标槽必须是 `MyIconButton/ClickEventHandler`”
+纳入 `Probe`/`Verify`。旧产物可用 `--force` 原地修复（只改那一个 `newobj`），结果与从原版
+重打一致。细节见 [VERSIONS.md](VERSIONS.md) §4.6。
 
 ### 5.1 联机（无默认节点）
 
@@ -768,8 +789,3 @@ Patcher 只改 code-behind 里对 UI 属性的赋值：
 - 许可与免责：本项目原创代码以 [MIT](LICENSE) 发布（PCL 派生文件除外），完整风险提示见
   [DISCLAIMER.md](DISCLAIMER.md)；补丁后的 PCL 属于修改版，不得再分发。中国大陆的
   游戏出版/进口/运营政策与 PCL 许可限制见该文第 4 节。
-
-
-
-
-

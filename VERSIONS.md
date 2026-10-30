@@ -116,10 +116,10 @@ ade6e04  2026-10-16  2.14.0.0           (tag 2.14.0.0 → 这里，二进制仍�
 
 | 版本 | 指纹匹配 | 实机状态 | 结论 |
 |---|---|---|---|
-| 2.99.0.0 | 7/7（已加入 profile） | 下载页、整合包导入、联机页均通过 | **支持**，产物 `6ee3b98e…2567ef` |
-| 2.99.0.0 快照版（构建 414） | 7/7，与正式版相同（已加入 profile） | 下载页、联机页签通过 | **支持**，产物 `2db36041…309b7`（`--no-update`） |
-| 2.99.0.1 | 7/7（已加入 profile） | 与 0.0 相同的冒烟项通过 | **支持**，产物 `f1c17eb1…df1297d` |
-| 2.99.0.1 快照版（构建 416） | 7/7，与 0.1 正式版相同（已加入 profile） | 下载页、联机页签通过；升级后的旧 `.bak` 被刷新 | **支持**，产物 `96138892…35677f`（`--no-update`） |
+| 2.99.0.0 | 7/7（已加入 profile） | 下载页、整合包导入、联机页均通过 | **支持**，产物 `d4fbe59e…5f0660a0` |
+| 2.99.0.0 快照版（构建 414） | 7/7，与正式版相同（已加入 profile） | 下载页、联机页签通过 | **支持**，产物 `ffdd04b1…f96945c3e`（`--no-update`） |
+| 2.99.0.1 | 7/7（已加入 profile） | 与 0.0 相同的冒烟项通过 | **支持**，产物 `96974c42…89a1ea84` |
+| 2.99.0.1 快照版（构建 416） | 7/7，与 0.1 正式版相同（已加入 profile） | 下载页、联机页签通过；升级后的旧 `.bak` 被刷新 | **支持**，产物 `b2ee11de…9dfa0c28`（`--no-update`） |
 | 2.14.0.0 | 2/7（仅参考） | 不适用 | 仅作 IL 对照 |
 
 四个已收录构建都不需要 `--force`：`--dry-run` 会打印
@@ -140,8 +140,9 @@ ade6e04  2026-10-16  2.14.0.0           (tag 2.14.0.0 → 这里，二进制仍�
 | `PCL\Log1.txt` | — | 0 次“法律法规”异常 |
 
 “资源详情 → 安装”按钮无法在无网环境点开验证，改用 IL 断言：
-`PageDownloadResourceDetail.InitializeStackResourceVersions` 在补丁后引用了 `Install_Click`
-（与 2.99.0.1 补丁后的形状一致）。
+`PageDownloadResourceDetail.InitializeStackResourceVersions` 在补丁后引用了 `Install_Click`，
+并且两个 `ToListItem` 委托分别落在 `MyListItem/ClickEventHandler` 与
+`MyIconButton/ClickEventHandler` 上（见 §4.6；只断言“引用了 Install_Click”曾漏掉后者）。
 
 ### 4.2 顺带修掉的一个探测缺陷
 
@@ -172,7 +173,7 @@ ade6e04  2026-10-16  2.14.0.0           (tag 2.14.0.0 → 这里，二进制仍�
 | 标题栏 | 启动 / 下载 / **联机** / 设置 / 更多 |
 | 下载页 | 合规提示消失，进入真实加载；沙箱无外网时报“你的网络环境不佳…（发送请求时出错。）” |
 | `PCL\Log1.txt` | `程序版本：快照版 2.99.0.0 (414)`，0 次“法律法规”异常 |
-| 产物 SHA-256 | `2db3604171afd0f2fe77cfbfdd9b712e2317a2ab96f51e336f12ebc1afd309b7` |
+| 产物 SHA-256 | `ffdd04b1e812de3d69893e94b81b49224604495c27f3b64ab152b77f96945c3e` |
 
 > 本表是 2026-10-29、`--no-update` 的运行记录。2026-10-30 起默认计划末尾多了一步
 > `ForceFullPackage`（更新改走完整包），默认产物因此与当时不同；`--no-update` 的产物
@@ -189,15 +190,16 @@ ade6e04  2026-10-16  2.14.0.0           (tag 2.14.0.0 → 这里，二进制仍�
 
 | 构建 | 大小（字节） | 源文件 SHA-256 | 补丁后 SHA-256 |
 |---|---|---|---|
-| `2.99.0.0` 正式版 | 5,980,160 | `6b6e1260cb5a1d6a303855f1c60cab3d0bc1aebba7e40a964180188b271e7386` | `6ee3b98e…2567ef` |
-| `2.99.0.0` 快照版（构建 414） | 5,985,280 | `5b64d6d540c376390470cea3ab99d47661e8bca81be2ba647ea83e7d2e9428fa` | `2db36041…309b7` |
-| `2.99.0.1` 正式版（构建 415） | 6,013,952 | `0db34e19d9eeb6d496d20fabe786ec16bbd36ba6b0ccdc8d29cb7e909c114397` | `f1c17eb1…df1297d` |
-| `2.99.0.1` 快照版（构建 416） | 6,019,072 | `2749aa5de361ff35a857dd0ca6ba4b0c8aecaa68fedeac413f54ce3899dba453` | `96138892…35677f`（`--no-update`） |
+| `2.99.0.0` 正式版 | 5,980,160 | `6b6e1260cb5a1d6a303855f1c60cab3d0bc1aebba7e40a964180188b271e7386` | `d4fbe59e…5f0660a0` |
+| `2.99.0.0` 快照版（构建 414） | 5,985,280 | `5b64d6d540c376390470cea3ab99d47661e8bca81be2ba647ea83e7d2e9428fa` | `6bb73c76…dafb3c3b9` |
+| `2.99.0.1` 正式版（构建 415） | 6,013,952 | `0db34e19d9eeb6d496d20fabe786ec16bbd36ba6b0ccdc8d29cb7e909c114397` | `96974c42…89a1ea84` |
+| `2.99.0.1` 快照版（构建 416） | 6,019,072 | `2749aa5de361ff35a857dd0ca6ba4b0c8aecaa68fedeac413f54ce3899dba453` | `b2ee11de…9dfa0c28`（`--no-update`） |
 
 补丁后哈希是参考值：补丁选项不同（例如取消“禁用更新”、只解锁下载）、或 patcher 版本不同，
 都会得到不同的产物，但**源文件哈希**是构建身份，始终对得上。上表数值是记录时的产物；
-2026-10-30 起默认计划含 `ForceFullPackage`，2.99.0.1 的默认产物为
-`43e728f55e0a09f078af141e036ebb397c453ec1a3af70e612dbd773b9428d15`。
+2026-10-30 起默认计划含 `ForceFullPackage`，patcher 1.1.1 的 2.99.0.1 默认产物为
+`96974c420448162a59850431cf7b1b01a956f5b466b2cd0af9d220ba89a1ea84`
+（1.1.0 及更早的 2.99.0.1 默认产物 `43e728f5…428d15` 带资源详情页的委托类型 bug，见 §4.5）。
 
 `--adopt` 收录进来的条目 `verified=0`，GUI 显示“（待验证）”；等实机验证过再把标记
 改成已验证（或直接写进 `Profiles.cs`）。
@@ -225,7 +227,7 @@ PCL 自己在 2026-10-30 08:53 把本机从 `快照版 2.99.0.0 (414)` 更新到
 | 识别 | `match : exact sha256 → 2.99.0.1 快照版`（收录前为 `structural`，都放行） |
 | 指纹 | `fp : all 7 known method fingerprints match` |
 | 写盘 | `backup : refreshing stale backup …bak`，`.bak` 刷新为 0.1 原版（6,019,072，`2749aa5d…`） |
-| 产物 | `96138892…35677f`（`--no-update`）；默认选项（含 `ForceFullPackage`）为 `54966237…4f783` |
+| 产物 | `b2ee11de…9dfa0c28`（`--no-update`）；默认选项（含 `ForceFullPackage`）为 `ba320da6…ae4b6b38` |
 | 重打 | 用默认选项再跑一次：`state : 已是补丁状态（备份匹配 2.99.0.1 快照版）`，从刷新后的 `.bak` 重建，无降级、无叠加 |
 | 旧状态保护 | 人为构造“已补丁 0.1 + 0.0 备份”，现在直接报错：`source is patched (2.99.0.1) but …bak is a different build (2.99.0.0); rebuilding from it would downgrade the launcher`，只有 `--force` 才降级 |
 
@@ -242,6 +244,52 @@ PCL 自己在 2026-10-30 08:53 把本机从 `快照版 2.99.0.0 (414)` 更新到
 > `Profiles.cs` 里 416 与 415 的 7 个锚点指纹完全相同，因此新版本既可以由结构指纹
 > 自动适配，也已被收录成 `exact`。下一个快照若只改非锚点代码，仍然不需要改代码。
 
+
+### 4.6 整合包详情页崩溃：两个同名 `ClickEventHandler`（2026-10-30）
+
+**现象**：补丁后打开「下载 → 整合包 → 任意整合包 → 展开版本卡片」，PCL 直接弹错误并
+退出（`Log2.txt`，返回值 `Exception`）：
+
+```text
+[A]ClickEventHandler 无法强制转换为 [B]ClickEventHandler
+   在 PCL.MyIconButton.add_Click
+   在 PCL.ResourceVersion._Closure$__27-0._Lambda$__0
+   在 PCL.MyVirtualizingElement`1.Init
+```
+
+**根因**：`PCL.ResourceVersion.ToListItem` 的两个处理器参数是**两个不同的委托类型**，
+只是简单名都叫 `ClickEventHandler`：
+
+| 参数 | 类型 | 用途 |
+|---|---|---|
+| 0 | `PCL.MyListItem/ClickEventHandler` | 整行点击（整合包：`Install_Click`） |
+| 1 | `PCL.MyIconButton/ClickEventHandler` | 行尾“另存为”图标按钮（`Save_Click`） |
+| 2 | `System.Boolean` | `IsBadDisplay` |
+
+1.1.0 及更早的 `PatchResourceDetailInstall` 把调用点里现成的 `newobj`（第 0 个参数的
+`MyListItem` 委托）同时用来构造两个处理器，于是第 1 个参数拿到的是
+`MyListItem/ClickEventHandler` 实例。IL 校验、`Verify` 都通过（两者签名同为
+`(Object, EventArgs)` 形状，`ldftn` 绑定在 CLR 里还允许逆变放宽），直到虚拟化行真正
+创建、`MyIconButton.Click += handler` 在 `add_Click` 里 `DirectCast` 才炸。
+2.99.0.0 / 2.99.0.1（含 414 / 416 快照）四个构建的调用点形状相同，**全中**。
+
+**修复**（patcher 1.1.1）：
+
+1. 不再复用调用点里的 `newobj`，改成从 `ToListItem` 的**签名**取两个参数类型，各自
+   `FindMethod(".ctor")`，再分别 `newobj`；参数类型漂移会直接报错，不会产出可加载但
+   会在运行时崩溃的文件；
+2. `InspectResourceDetailInstall` 把“图标槽是不是 `MyIconButton/ClickEventHandler`”
+   纳入 `Probe`/`Verify`：旧补丁产物会显示
+   `resource detail install (icon button bound to ClickEventHandler instead of ClickEventHandler)`；
+3. 旧产物可以**原地修复**（`--force` 时走 `RepairResourceDetailHandlerTypes`，只改那一个
+   `newobj` 的类型），修复结果与从原版重打的字节一致（2.99.0.1：`96974c42…`）；
+4. 顺带修掉调用点里 `ldloc` 指令对象被插入两处的写法，改为每个分支各建一条。
+
+**验证**：四个构建各打一次，`InitializeStackResourceVersions` 的两条 `newobj` 分别为
+`PCL.MyListItem/ClickEventHandler`（`Install_Click`）与 `PCL.MyIconButton/ClickEventHandler`
+（`Save_Click`）；写盘后重新加载的 `Verify` 也断言这一点。该路径需要在有外网的桌面会话里
+才能真正点开（沙箱进程 TLS 握手失败，`安全包中没有可用的凭证`），所以本条的实机复现留给
+用户侧；IL 与委托类型已经由 `--probe` / `--dry-run` 覆盖。
 
 ## 5. 社区版（PCL CE）
 
@@ -273,5 +321,3 @@ $py = 'python'   # 或本机任意 Python 3.8+ 解释器的完整路径
 # 一键：识别 → 试运行 → 原地补丁（-Adopt 时先收录）
 pwsh .\scripts\adapt_new_pcl.ps1 "新的 PCL.exe" -DryRun
 ```
-
-

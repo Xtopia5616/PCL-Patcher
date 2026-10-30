@@ -126,9 +126,9 @@ internal static partial class Program
                       m.Body.Instructions.Any(i => i.Operand is string s2 && s2 == "下载"));
         if (!prompt) throw new InvalidOperationException("Minecraft update prompt still has no download button");
 
-        var detail = FindMethod(FindType(module, "PCL.PageDownloadResourceDetail"), "InitializeStackResourceVersions");
-        if (!detail.Body.Instructions.Any(i => i.Operand is IMethod m && m.Name == "Install_Click"))
-            throw new InvalidOperationException("resource detail still has no install button");
+        var detailState = InspectResourceDetailInstall(module, out var detailReason);
+        if (detailState != ResourceDetailInstallState.Patched)
+            throw new InvalidOperationException("resource detail install: " + detailReason);
 
         var selectLeft = FindMethod(FindType(module, "PCL.PageSelectLeft"), "McFolderListUI");
         var importAt = selectLeft.Body.Instructions
@@ -206,6 +206,13 @@ internal static partial class Program
         return 1;
     }
 
+    internal enum ResourceDetailInstallState
+    {
+        Missing,
+        WrongHandlerType,
+        Patched
+    }
+
     private static int PatchResourceDetailInstall(ModuleDef module)
     {
         var page = FindType(module, "PCL.PageDownloadResourceDetail");
@@ -216,6 +223,29 @@ internal static partial class Program
         var targetField = FindField(page, "TargetResourceType");
         var install = FindMethod(page, "Install_Click");
         var save = FindMethod(page, "Save_Click");
+
+        // ResourceVersion.ToListItem takes two handlers that are *different* delegate
+        // types with the same simple name:
+        //   parameter 0: PCL.MyListItem/ClickEventHandler   (row click)
+        //   parameter 1: PCL.MyIconButton/ClickEventHandler (the row's save-as icon)
+        // Wrapping Install_Click in the list-item delegate and passing it as the icon
+        // handler builds without complaint, but the row materialises through
+        // MyIconButton.add_Click, which casts to its own nested type and throws
+        // InvalidCastException ("[A]ClickEventHandler cannot be cast to
+        // [B]ClickEventHandler") — the integrated-pack detail page crash.
+        // Derive both constructors from the callee signature so neither slot can
+        // drift to the other delegate again.
+        var toListItem = FindMethod(FindType(module, "PCL.ResourceVersion"), "ToListItem");
+        if (toListItem.MethodSig.Params.Count != 3 ||
+            toListItem.MethodSig.Params[2].FullName != "System.Boolean")
+            throw new InvalidOperationException("ResourceVersion.ToListItem signature changed");
+        var rowCtor = DelegateCtor(toListItem, 0);
+        var iconCtor = DelegateCtor(toListItem, 1);
+
+        // Files patched by an older build of this tool carry the wrong delegate in
+        // the icon slot; repair that in place instead of forcing a restore from .bak.
+        var repaired = RepairResourceDetailHandlerTypes(ins, rowCtor, iconCtor);
+        if (repaired > 0) return repaired;
 
         for (var start = 0; start + 10 < ins.Count; start++)
         {
@@ -235,13 +265,13 @@ internal static partial class Program
                 ins[start + 9].Operand is not IMethod add || add.Name != "Add") continue;
             if (ins[start + 10].OpCode != OpCodes.Pop) continue;
 
-            var clickCtor = (IMethod)ins[start + 5].Operand!;
             var addIns = ins[start + 9];
-            var elseLabel = OpCodes.Ldarg_0.ToInstruction();
-            var ldloc = ins[start + 7].OpCode == OpCodes.Ldloc_1
-                ? OpCodes.Ldloc_1.ToInstruction()
-                : OpCodes.Ldloc_S.ToInstruction((Local)ins[start + 7].Operand!);
+            var boolLocal = ins[start + 7].Operand as Local;
+            var boolLoad = ins[start + 7].OpCode == OpCodes.Ldloc_1
+                ? (Func<Instruction>)(() => OpCodes.Ldloc_1.ToInstruction())
+                : () => OpCodes.Ldloc_S.ToInstruction(boolLocal!);
 
+            var elseLabel = OpCodes.Ldarg_0.ToInstruction();
             var replacement = new List<Instruction>
             {
                 ins[start],
@@ -254,19 +284,19 @@ internal static partial class Program
 
                 OpCodes.Ldarg_0.ToInstruction(),
                 OpCodes.Ldftn.ToInstruction(install),
-                OpCodes.Newobj.ToInstruction(clickCtor),
+                OpCodes.Newobj.ToInstruction(rowCtor),
                 OpCodes.Ldarg_0.ToInstruction(),
                 OpCodes.Ldftn.ToInstruction(save),
-                OpCodes.Newobj.ToInstruction(clickCtor),
-                ins[start + 7],
+                OpCodes.Newobj.ToInstruction(iconCtor),
+                boolLoad(),
                 OpCodes.Callvirt.ToInstruction((IMethod)ins[start + 8].Operand!),
                 OpCodes.Br.ToInstruction(addIns),
 
                 elseLabel,
                 OpCodes.Ldftn.ToInstruction(save),
-                OpCodes.Newobj.ToInstruction(clickCtor),
+                OpCodes.Newobj.ToInstruction(rowCtor),
                 OpCodes.Ldnull.ToInstruction(),
-                ldloc,
+                boolLoad(),
                 OpCodes.Callvirt.ToInstruction((IMethod)ins[start + 8].Operand!)
             };
 
@@ -278,6 +308,88 @@ internal static partial class Program
 
         return 0;
     }
+
+    /// <summary>
+    /// Re-points an already patched icon slot that was built with the list-item
+    /// delegate (the 2.99 crash) to PCL.MyIconButton/ClickEventHandler.
+    /// </summary>
+    private static int RepairResourceDetailHandlerTypes(IList<Instruction> ins, MethodDef rowCtor, MethodDef iconCtor)
+    {
+        for (var i = 0; i + 4 < ins.Count; i++)
+        {
+            if (ins[i].OpCode != OpCodes.Ldftn ||
+                ins[i].Operand is not IMethod install || install.Name != "Install_Click") continue;
+            if (ins[i + 1].OpCode != OpCodes.Newobj ||
+                ins[i + 1].Operand is not IMethod row || !SameType(row.DeclaringType, rowCtor.DeclaringType)) continue;
+            if (ins[i + 4].OpCode != OpCodes.Newobj ||
+                ins[i + 4].Operand is not IMethod icon) continue;
+            if (SameType(icon.DeclaringType, iconCtor.DeclaringType)) return 0;
+
+            ins[i + 4] = OpCodes.Newobj.ToInstruction(iconCtor);
+            return 1;
+        }
+
+        return 0;
+    }
+
+    private static ResourceDetailInstallState InspectResourceDetailInstall(ModuleDef module, out string reason)
+    {
+        var method = FindMethod(FindType(module, "PCL.PageDownloadResourceDetail"), "InitializeStackResourceVersions");
+        var ins = method.Body?.Instructions
+                  ?? throw new InvalidOperationException("InitializeStackResourceVersions has no body");
+        var toListItem = FindMethod(FindType(module, "PCL.ResourceVersion"), "ToListItem");
+        var rowCtor = DelegateCtor(toListItem, 0);
+        var iconCtor = DelegateCtor(toListItem, 1);
+
+        for (var i = 0; i + 4 < ins.Count; i++)
+        {
+            if (ins[i].OpCode != OpCodes.Ldftn ||
+                ins[i].Operand is not IMethod install || install.Name != "Install_Click") continue;
+            if (ins[i + 1].OpCode != OpCodes.Newobj ||
+                ins[i + 1].Operand is not IMethod row || !SameType(row.DeclaringType, rowCtor.DeclaringType))
+            {
+                reason = "install handler is not wrapped in " + rowCtor.DeclaringType!.Name;
+                return ResourceDetailInstallState.Missing;
+            }
+            if (ins[i + 4].OpCode != OpCodes.Newobj || ins[i + 4].Operand is not IMethod icon)
+            {
+                reason = "icon-button handler is not a delegate creation";
+                return ResourceDetailInstallState.Missing;
+            }
+            if (!SameType(icon.DeclaringType, iconCtor.DeclaringType))
+            {
+                reason = $"icon button bound to {icon.DeclaringType?.FullName} instead of {iconCtor.DeclaringType!.FullName}";
+                return ResourceDetailInstallState.WrongHandlerType;
+            }
+
+            reason = "install handler + save-as icon button";
+            return ResourceDetailInstallState.Patched;
+        }
+
+        reason = "no install handler on the resource version rows";
+        return ResourceDetailInstallState.Missing;
+    }
+
+    private static TypeDef DelegateParamType(MethodDef method, int index)
+    {
+        var param = method.MethodSig.Params[index];
+        var type = param.ToTypeDefOrRef().ResolveTypeDef();
+        if (type is null)
+            throw new InvalidOperationException(
+                $"{method.FullName} parameter #{index} ({param.FullName}) does not resolve inside this module");
+        if (type.BaseType?.FullName != "System.MulticastDelegate")
+            throw new InvalidOperationException(
+                $"{method.FullName} parameter #{index} is {type.FullName}, not a delegate");
+        return type;
+    }
+
+    private static MethodDef DelegateCtor(MethodDef method, int index)
+        => DelegateParamType(method, index).FindMethod(".ctor")
+           ?? throw new InvalidOperationException($"{method.FullName} parameter #{index} has no .ctor");
+
+    private static bool SameType(ITypeDefOrRef? left, ITypeDefOrRef? right)
+        => left is not null && right is not null &&
+           string.Equals(left.FullName, right.FullName, StringComparison.Ordinal);
 
     private static int PatchUpdatePrompt(ModuleDef module)
     {

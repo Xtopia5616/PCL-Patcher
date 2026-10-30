@@ -114,7 +114,10 @@ internal static partial class Program
         if (!IsUpdatePromptPatched(module)) pending.Add("update prompt");
         if (!IsModDisabledPatched(module)) pending.Add("mod-disabled button");
         if (!IsLaunchEmptyStatePatched(module)) pending.Add("launch empty state");
-        if (!IsResourceDetailPatched(module)) pending.Add("resource detail install");
+        var detailState = InspectResourceDetailInstall(module, out var detailReason);
+        if (detailState == ResourceDetailInstallState.Missing) pending.Add("resource detail install");
+        else if (detailState == ResourceDetailInstallState.WrongHandlerType)
+            pending.Add("resource detail install (" + detailReason + ")");
         if (!IsSelectLeftImportPatched(module)) pending.Add("import modpack item");
 
         if (pending.Count == 0) return new(PatchState.AlreadyPatched, "all 5 UI sites already present");
@@ -163,10 +166,7 @@ internal static partial class Program
     }
 
     private static bool IsResourceDetailPatched(ModuleDef module)
-    {
-        var ins = FindMethod(FindType(module, "PCL.PageDownloadResourceDetail"), "InitializeStackResourceVersions").Body?.Instructions;
-        return ins?.Any(i => i.Operand is IMethod m && m.Name == "Install_Click") == true;
-    }
+        => InspectResourceDetailInstall(module, out _) == ResourceDetailInstallState.Patched;
 
     private static bool IsSelectLeftImportPatched(ModuleDef module)
     {

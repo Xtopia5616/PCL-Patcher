@@ -314,10 +314,16 @@ GUI 默认以管理员权限启动（`app.manifest` 的 `requireAdministrator`�
 
 | 构建 | 大小（字节） | 源文件 SHA-256 | 补丁后 SHA-256 | 已验证内容 |
 |---|---|---|---|---|
-| `2.99.0.0` 正式版 | 5,980,160 | `6b6e1260cb5a1d6a303855f1c60cab3d0bc1aebba7e40a964180188b271e7386` | `6ee3b98e…2567ef` | 下载页、整合包导入、联机页 |
-| `2.99.0.0` 快照版（构建 414） | 5,985,280 | `5b64d6d540c376390470cea3ab99d47661e8bca81be2ba647ea83e7d2e9428fa` | `2db36041…309b7` | 下载页、联机页签、日志 0 次“法律法规” |
-| `2.99.0.1` 正式版（构建 415） | 6,013,952 | `0db34e19d9eeb6d496d20fabe786ec16bbd36ba6b0ccdc8d29cb7e909c114397` | `f1c17eb1…df1297d` | 与 `2.99.0.0` 相同的冒烟项 |
-| `2.99.0.1` 快照版（构建 416） | 6,019,072 | `2749aa5de361ff35a857dd0ca6ba4b0c8aecaa68fedeac413f54ce3899dba453` | `96138892…35677f`（`--no-update`） | 升级后直接补丁：下载页、联机页签、备份被刷新 |
+| `2.99.0.0` 正式版 | 5,980,160 | `6b6e1260cb5a1d6a303855f1c60cab3d0bc1aebba7e40a964180188b271e7386` | `d4fbe59e…5f0660a0` | 下载页、整合包导入、联机页 |
+| `2.99.0.0` 快照版（构建 414） | 5,985,280 | `5b64d6d540c376390470cea3ab99d47661e8bca81be2ba647ea83e7d2e9428fa` | `6bb73c76…dafb3c3b9` | 下载页、联机页签、日志 0 次“法律法规” |
+| `2.99.0.1` 正式版（构建 415） | 6,013,952 | `0db34e19d9eeb6d496d20fabe786ec16bbd36ba6b0ccdc8d29cb7e909c114397` | `96974c42…89a1ea84` | 与 `2.99.0.0` 相同的冒烟项 |
+| `2.99.0.1` 快照版（构建 416） | 6,019,072 | `2749aa5de361ff35a857dd0ca6ba4b0c8aecaa68fedeac413f54ce3899dba453` | `b2ee11de…9dfa0c28`（`--no-update`） | 升级后直接补丁：下载页、联机页签、备份被刷新 |
+
+> **1.1.1 修复**：资源详情页“另存为”图标按钮此前被绑定成列表项的
+> `MyListItem/ClickEventHandler`，与 `MyIconButton.Click` 期望的类型不是同一个（虽然名字
+> 一样），于是展开整合包版本卡片时必抛 `InvalidCastException`。四个已收录构建都受影响，
+> 现在按 `ToListItem` 的签名分别构造两个委托，并在 `Probe`/`Verify` 里断言类型；旧产物
+> 可用 `--force` 原地修复。详见 [VERSIONS.md](VERSIONS.md) §4.6。
 
 来源、构建号与逐项实测记录见 [VERSIONS.md](VERSIONS.md)；`--adopt` 收录的外部构建默认
 标为“待验证”，不会有这个标记。
@@ -385,4 +391,3 @@ Already / Missing`，或用 `--force` 强制尝试（仍会逐项 Probe/Verify�
   MIT 只覆盖工具本身，不改变 PCL 的任何权利。
 - 完整风险提示见 [DISCLAIMER.md](DISCLAIMER.md)。发布包**不包含**
   `Plain Craft Launcher 2.exe`、PCL 的嵌入 DLL 或 PCL 本体。
-

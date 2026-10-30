@@ -47,7 +47,7 @@ internal static partial class Program
 
     private static int Run(string[] args)
     {
-        Console.WriteLine("PclPatcher 1.1 · 第三方 IL 补丁工具");
+        Console.WriteLine("PclPatcher 1.1.1 · 第三方 IL 补丁工具");
         Console.WriteLine("Some birds aren't meant to be caged. Their feathers are just too bright.");
         Console.WriteLine("And when they fly away, the part of you that knows it was a sin to lock them up does rejoice.");
         Console.WriteLine();
