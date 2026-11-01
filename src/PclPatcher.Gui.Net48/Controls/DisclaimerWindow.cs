@@ -119,10 +119,7 @@ internal sealed class DisclaimerWindow : Window
         Opacity = 0;
         Loaded += (_, _) =>
         {
-            BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(140))
-            {
-                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
-            });
+            PclUi.AnimateWindowIn(this, Content as FrameworkElement, 150);
             if (_readOnly) _accept?.Focus();
             else _agree?.Focus();
         };

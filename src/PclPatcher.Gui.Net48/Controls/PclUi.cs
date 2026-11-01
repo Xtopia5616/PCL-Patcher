@@ -1,4 +1,4 @@
-﻿namespace PclPatcher.Gui.Net48;
+namespace PclPatcher.Gui.Net48;
 
 /// <summary>
 /// Small set of PCL-flavoured primitives shared by the code-built pages.
@@ -145,6 +145,11 @@ internal static class PclUi
 
     public static void AnimateColor(SolidColorBrush brush, Color to, int ms = 140)
     {
+        if (!MotionEnabled)
+        {
+            brush.Color = to;
+            return;
+        }
         var animation = new ColorAnimation(to, TimeSpan.FromMilliseconds(ms))
         {
             EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
@@ -152,21 +157,118 @@ internal static class PclUi
         brush.BeginAnimation(SolidColorBrush.ColorProperty, animation);
     }
 
-    public static void FadeIn(UIElement element, int ms = 180, double offsetX = 0)
+    /// <summary>
+    /// Follows the Windows "show animations" preference. Turning it off makes
+    /// every helper below apply the final state in one frame, which is also the
+    /// right behaviour over slow remote sessions.
+    /// </summary>
+    public static bool MotionEnabled => SystemParameters.ClientAreaAnimation;
+
+    public static void FadeIn(UIElement element, int ms = 180, double offsetX = 0, double offsetY = 0, double scaleFrom = 1)
     {
+        if (element is null) return;
+        if (!MotionEnabled)
+        {
+            element.Opacity = 1;
+            element.RenderTransform = null;
+            return;
+        }
         element.Opacity = 0;
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
         element.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(ms))
         {
-            EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+            EasingFunction = ease
         });
 
-        if (Math.Abs(offsetX) < 0.01) return;
-        var transform = new TranslateTransform(offsetX, 0);
-        element.RenderTransform = transform;
-        transform.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(offsetX, 0, TimeSpan.FromMilliseconds(ms))
+        var hasX = Math.Abs(offsetX) > 0.01;
+        var hasY = Math.Abs(offsetY) > 0.01;
+        var hasScale = Math.Abs(scaleFrom - 1) > 0.001;
+        if (!hasX && !hasY && !hasScale) return;
+
+        var group = new TransformGroup();
+        if (hasScale)
         {
-            EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+            element.RenderTransformOrigin = new Point(0.5, 0.5);
+            var scale = new ScaleTransform(scaleFrom, scaleFrom);
+            group.Children.Add(scale);
+            scale.BeginAnimation(ScaleTransform.ScaleXProperty,
+                new DoubleAnimation(scaleFrom, 1, TimeSpan.FromMilliseconds(ms)) { EasingFunction = ease });
+            scale.BeginAnimation(ScaleTransform.ScaleYProperty,
+                new DoubleAnimation(scaleFrom, 1, TimeSpan.FromMilliseconds(ms)) { EasingFunction = ease });
+        }
+
+        if (hasX || hasY)
+        {
+            var transform = new TranslateTransform(offsetX, offsetY);
+            group.Children.Add(transform);
+            if (hasX)
+                transform.BeginAnimation(TranslateTransform.XProperty,
+                    new DoubleAnimation(offsetX, 0, TimeSpan.FromMilliseconds(ms)) { EasingFunction = ease });
+            if (hasY)
+                transform.BeginAnimation(TranslateTransform.YProperty,
+                    new DoubleAnimation(offsetY, 0, TimeSpan.FromMilliseconds(ms)) { EasingFunction = ease });
+        }
+
+        element.RenderTransform = group;
+    }
+
+    /// <summary>
+    /// Fades an element out, then runs <paramref name="completed"/> on the UI
+    /// thread. Used for closing dialogs and the drop overlay so they do not
+    /// disappear in a single frame.
+    /// </summary>
+    public static void FadeOut(UIElement element, int ms = 120, Action completed = null)
+    {
+        if (element is null) return;
+        if (!MotionEnabled)
+        {
+            element.Opacity = 0;
+            completed?.Invoke();
+            return;
+        }
+        var animation = new DoubleAnimation(element.Opacity, 0, TimeSpan.FromMilliseconds(ms))
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn }
+        };
+        if (completed is not null) animation.Completed += (_, _) => completed();
+        element.BeginAnimation(UIElement.OpacityProperty, animation);
+    }
+
+    /// <summary>
+    /// Dialog entry: the window fades in while its content rises and settles
+    /// from a slightly smaller scale. The window background follows the fade,
+    /// so a borderless dialog never flashes at full opacity.
+    /// </summary>
+    public static void AnimateWindowIn(Window window, FrameworkElement content, int ms = 160)
+    {
+        if (window is null) return;
+        if (!MotionEnabled)
+        {
+            window.Opacity = 1;
+            return;
+        }
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        window.Opacity = 0;
+        window.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(ms))
+        {
+            EasingFunction = ease
         });
+
+        if (content is null) return;
+        content.RenderTransformOrigin = new Point(0.5, 0.5);
+        var scale = new ScaleTransform(0.975, 0.975);
+        var translate = new TranslateTransform(0, 9);
+        var group = new TransformGroup();
+        group.Children.Add(scale);
+        group.Children.Add(translate);
+        content.RenderTransform = group;
+
+        scale.BeginAnimation(ScaleTransform.ScaleXProperty,
+            new DoubleAnimation(0.975, 1, TimeSpan.FromMilliseconds(ms)) { EasingFunction = ease });
+        scale.BeginAnimation(ScaleTransform.ScaleYProperty,
+            new DoubleAnimation(0.975, 1, TimeSpan.FromMilliseconds(ms)) { EasingFunction = ease });
+        translate.BeginAnimation(TranslateTransform.YProperty,
+            new DoubleAnimation(9, 0, TimeSpan.FromMilliseconds(ms)) { EasingFunction = ease });
     }
 
     public static void AttachTint(Border border, Color hover, Color normal, int ms = 120)

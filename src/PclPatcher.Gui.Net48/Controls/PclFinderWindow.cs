@@ -57,6 +57,7 @@ internal sealed class PclFinderWindow : Window
         _useButton.Opacity = 0.5;
 
         Content = BuildShell();
+        Opacity = 0;
 
         foreach (var candidate in candidates ?? Array.Empty<PclCandidate>())
             AddCandidate(candidate, null);
@@ -68,6 +69,7 @@ internal sealed class PclFinderWindow : Window
 
         Loaded += (_, _) =>
         {
+            PclUi.FadeIn(this, 150);
             // Re-apply the selection once the PCL button template is live; a
             // candidate chosen in the constructor would otherwise keep the
             // primary button in its initial disabled look.

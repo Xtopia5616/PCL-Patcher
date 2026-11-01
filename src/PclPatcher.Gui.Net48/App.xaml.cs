@@ -170,9 +170,28 @@ public partial class App : Application
     private static string FindPcl(string[] args)
     {
         var settings = AppSettings.Load();
+
+        // An explicit command-line path is the user's choice and must win over
+        // remembered paths: those carry a higher locator score, so without this
+        // shortcut launching "PclPatcher.Gui.exe X:\test\PCL.exe" silently
+        // opened the last used PCL instead.
+        var explicitArg = args.FirstOrDefault();
+        if (!string.IsNullOrWhiteSpace(explicitArg))
+        {
+            try
+            {
+                var explicitPath = IOPath.GetFullPath(explicitArg.Trim().Trim('"'));
+                if (PclLocator.LooksLikePcl(explicitPath)) return Remember(settings, explicitPath);
+            }
+            catch
+            {
+                // Not a path (a flag or malformed input); fall back to the scan.
+            }
+        }
+
         var seeds = new List<string>
         {
-            args.FirstOrDefault(),
+            explicitArg,
             IOPath.Combine(AppDomain.CurrentDomain.BaseDirectory, "Plain Craft Launcher 2.exe"),
             IOPath.Combine(Environment.CurrentDirectory, "Plain Craft Launcher 2.exe"),
             @"D:\Minecraft\Plain Craft Launcher 2.exe"

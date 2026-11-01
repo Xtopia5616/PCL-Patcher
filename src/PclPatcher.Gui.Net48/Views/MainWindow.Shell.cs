@@ -18,25 +18,19 @@ public partial class MainWindow : Window
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-        _pages = new Dictionary<PageKind, FrameworkElement>
-        {
-            [PageKind.Patch] = BuildPatchPage(),
-            [PageKind.Log] = BuildLogPage(),
-            [PageKind.About] = BuildAboutPage()
-        };
+        // Pages are built on first use: only the patch page is part of the
+        // startup path. Log/About are several hundred controls each and used to
+        // be constructed before the window was ever shown, which made startup
+        // noticeably slower for a page the user may never open.
+        _pages = new Dictionary<PageKind, FrameworkElement>();
 
-        var host = new Grid
+        _pageHost = new Grid
         {
             Background = PclUi.PageBrush,
             ClipToBounds = true
         };
-        foreach (var page in _pages.Values)
-        {
-            page.Visibility = Visibility.Collapsed;
-            host.Children.Add(page);
-        }
-        Grid.SetColumn(host, 1);
-        body.Children.Add(host);
+        Grid.SetColumn(_pageHost, 1);
+        body.Children.Add(_pageHost);
         body.Children.Add(BuildNavRail());
 
         Grid.SetRow(body, 1);
@@ -50,6 +44,37 @@ public partial class MainWindow : Window
         ShowPage(PageKind.Patch, false);
         return shell;
     }
+
+    /// <summary>
+    /// Returns the page, creating and attaching it the first time it is shown.
+    /// Building all pages up front was the largest single piece of startup work
+    /// in the shell (the About page alone builds dozens of cards and links).
+    /// </summary>
+    private FrameworkElement GetOrCreatePage(PageKind page)
+    {
+        if (_pages is null) return null;
+        if (_pages.TryGetValue(page, out var existing)) return existing;
+
+        var created = page switch
+        {
+            PageKind.Patch => BuildPatchPage(),
+            PageKind.Log => BuildLogPage(),
+            PageKind.About => BuildAboutPage(),
+            _ => null
+        };
+        if (created is null) return null;
+
+        created.Visibility = Visibility.Collapsed;
+        _pages[page] = created;
+        _pageHost?.Children.Add(created);
+        return created;
+    }
+
+    /// <summary>
+    /// The log panel lives on the log page, but the patch run writes to it even
+    /// when that page was never opened; build it before the first append.
+    /// </summary>
+    private void EnsureLogPage() => GetOrCreatePage(PageKind.Log);
 
     private UIElement BuildTitleBar()
     {
@@ -467,8 +492,16 @@ public partial class MainWindow : Window
 
     private void ShowPage(PageKind page, bool animate = true)
     {
-        if (_pages is null) return;
-        if (_page == page && _pages[page].Visibility == Visibility.Visible) return;
+        if (_pages is null || _pageHost is null) return;
+        var target = GetOrCreatePage(page);
+        if (target is null) return;
+        if (_page == page && target.Visibility == Visibility.Visible) return;
+
+        // Slide in from the side the page sits on relative to the old one, so
+        // 补丁 → 日志 → 关于 feels directional instead of always entering from
+        // the same edge.
+        var previous = _page;
+        var direction = (int)page >= (int)previous ? 1 : -1;
 
         foreach (var pair in _pages)
             pair.Value.Visibility = pair.Key == page ? Visibility.Visible : Visibility.Collapsed;
@@ -479,7 +512,7 @@ public partial class MainWindow : Window
         SetNavActive(_navAbout, page == PageKind.About);
         foreach (var tab in _headerTabItems) SetHeaderActive(tab, tab.Page == page);
 
-        if (animate) PclUi.FadeIn(_pages[page], 170, 8);
+        if (animate) PclUi.FadeIn(target, 190, 14 * direction);
         if (page == PageKind.Log) _log?.ScrollToEnd();
     }
 

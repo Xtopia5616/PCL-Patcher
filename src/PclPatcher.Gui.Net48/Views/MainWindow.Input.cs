@@ -48,7 +48,12 @@ public partial class MainWindow : Window
         }
         e.Effects = DragDropEffects.Copy;
         _dropSub.Text = files.Length == 1 ? IOPath.GetFileName(files[0]) : files.Length + " 个文件";
-        _dropOverlay.Visibility = Visibility.Visible;
+        if (_dropOverlay.Visibility != Visibility.Visible)
+        {
+            _dropFade++;
+            _dropOverlay.Visibility = Visibility.Visible;
+            PclUi.FadeIn(_dropOverlay, 110);
+        }
         e.Handled = true;
     }
 
@@ -72,7 +77,16 @@ public partial class MainWindow : Window
 
     private void HideDropOverlay()
     {
-        if (_dropOverlay != null) _dropOverlay.Visibility = Visibility.Collapsed;
+        if (_dropOverlay is null || _dropOverlay.Visibility != Visibility.Visible) return;
+        var version = ++_dropFade;
+        PclUi.FadeOut(_dropOverlay, 90, () =>
+        {
+            // A new drag may have faded the overlay back in while this one was
+            // finishing; only the latest fade may hide it.
+            if (version != _dropFade) return;
+            _dropOverlay.Visibility = Visibility.Collapsed;
+            _dropOverlay.Opacity = 1;
+        });
     }
 
     // ------------------------------------------------------------------
@@ -90,9 +104,20 @@ public partial class MainWindow : Window
         // until it is acknowledged, nothing in the window is usable.
         if (!EnsureDisclaimerAccepted()) return;
 
-        UpdatePatcherInfo();
-        SetSource(_pclPath);
         UpdateResponsiveLayout();
+
+        // Filling the source box and resolving the embedded patcher are the
+        // expensive parts of Loaded: the PCL text box lays out on assignment,
+        // and on a machine without .NET 10 FindPatcher may materialise the
+        // 36 MB self-contained payload. Loaded runs inside Show(), so doing
+        // either here delays the first visible frame. Queue both behind the
+        // first render so the window appears immediately.
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (!IsLoaded) return;
+            UpdatePatcherInfo();
+            SetSource(_pclPath);
+        }), DispatcherPriority.Background);
     }
 
     private void SetSource(string path, string note = null)

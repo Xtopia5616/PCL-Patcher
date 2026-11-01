@@ -245,6 +245,9 @@ public partial class MainWindow : Window
         _downgradeBlocked = false;
         SetBusy(true);
         _resultBanner.Visibility = Visibility.Collapsed;
+        // The log page is built lazily; a run writes to its panel before the
+        // user may ever have opened that page, so make sure it exists first.
+        EnsureLogPage();
         _log.Clear();
         _log.SetState(LogState.Running);
         if (!restore)
@@ -459,7 +462,7 @@ public partial class MainWindow : Window
         _resultLogBlock.Visibility = showLog ? Visibility.Visible : Visibility.Collapsed;
         _resultOpenBlock.Visibility = showOpen ? Visibility.Visible : Visibility.Collapsed;
         _resultBanner.Visibility = Visibility.Visible;
-        PclUi.FadeIn(_resultBanner, 160);
+        PclUi.FadeIn(_resultBanner, 180, 0, 6);
     }
 
     private void SetStatus(string text, StatusTone tone)

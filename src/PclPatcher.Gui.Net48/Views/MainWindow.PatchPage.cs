@@ -313,12 +313,18 @@ public partial class MainWindow : Window
         var row = new Grid { Height = 37 };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        // A checked option gets a very light tint that fades in; PCL's own
+        // control animations are disabled in this host (no ModAnimation timer).
+        var rowTint = PclUi.Live(Colors.Transparent);
+        row.Background = rowTint;
         var check = new PCL.MyCheckBox
         {
             Text = title,
             Width = 128,
             VerticalAlignment = VerticalAlignment.Center
         };
+        check.Change += (_, isChecked) => PclUi.AnimateColor(rowTint,
+            isChecked ? Color.FromArgb(0x0F, 0x13, 0x70, 0xF3) : Colors.Transparent, 160);
         if (check.LabText != null)
         {
             check.LabText.FontSize = 13.5;

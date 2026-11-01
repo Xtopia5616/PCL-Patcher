@@ -110,6 +110,7 @@ public partial class MainWindow : Window
     private TextBlock _dropSub;
 
     private Dictionary<PageKind, FrameworkElement> _pages;
+    private Grid _pageHost;
     private PageKind _page;
     private NavItem _navPatch;
     private NavItem _navLog;
@@ -145,6 +146,7 @@ public partial class MainWindow : Window
     private string _closestLabel;
     private int _infoGeneration;
     private int _probeGeneration;
+    private int _dropFade;
 
     public MainWindow(string pclPath)
     {

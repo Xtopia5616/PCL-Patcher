@@ -1,4 +1,4 @@
-﻿namespace PclPatcher.Gui.Net48;
+namespace PclPatcher.Gui.Net48;
 
 internal enum DialogTone
 {
@@ -48,6 +48,40 @@ internal static class PclDialog
         PclUi.EnableRoundedCorners(window);
 
         var result = false;
+        var closing = false;
+        void CloseDialog(bool accepted)
+        {
+            if (closing) return;
+            closing = true;
+            result = accepted;
+            // Let the fade finish before the window disappears; ShowDialog()
+            // keeps the caller blocked until this Close() runs.
+            if (!window.IsVisible)
+            {
+                window.Close();
+                return;
+            }
+
+            var closed = false;
+            void Finish()
+            {
+                if (closed) return;
+                closed = true;
+                try { window.Close(); } catch { /* already closed */ }
+            }
+
+            PclUi.FadeOut(window, 100, Finish);
+            // Fallback: never leave a modal dialog on screen if the opacity
+            // animation is interrupted (for example the window is hidden).
+            var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(300) };
+            timer.Tick += (_, _) =>
+            {
+                timer.Stop();
+                Finish();
+            };
+            timer.Start();
+        }
+
         var shell = new Grid();
         shell.RowDefinitions.Add(new RowDefinition { Height = new GridLength(40) });
         shell.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -116,7 +150,7 @@ internal static class PclDialog
             PclUi.AnimateColor(closeBrush, Colors.Transparent, 160);
             closeCircle.Effect = null;
         };
-        close.MouseLeftButtonUp += (_, _) => window.Close();
+        close.MouseLeftButtonUp += (_, _) => CloseDialog(false);
         barGrid.Children.Add(close);
         bar.Child = barGrid;
         shell.Children.Add(bar);
@@ -180,21 +214,13 @@ internal static class PclDialog
 
         if (!string.IsNullOrWhiteSpace(secondary))
         {
-            var cancel = PclUi.Button(secondary, () =>
-            {
-                result = false;
-                window.Close();
-            }, 34);
+            var cancel = PclUi.Button(secondary, () => CloseDialog(false), 34);
             cancel.MinWidth = 82;
             cancel.Margin = new Thickness(0, 0, 8, 0);
             buttons.Children.Add(cancel);
         }
 
-        var ok = PclUi.Button(primary, () =>
-        {
-            result = true;
-            window.Close();
-        }, 34, true);
+        var ok = PclUi.Button(primary, () => CloseDialog(true), 34, true);
         ok.MinWidth = 88;
         buttons.Children.Add(ok);
         body.Children.Add(buttons);
@@ -208,26 +234,22 @@ internal static class PclDialog
         {
             if (e.Key == Key.Escape)
             {
-                result = false;
-                window.Close();
+                CloseDialog(false);
             }
             else if (e.Key == Key.Enter)
             {
-                result = true;
-                window.Close();
+                CloseDialog(true);
             }
         };
 
-        window.Opacity = 0;
         window.Loaded += (_, _) =>
         {
-            window.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(120))
-            {
-                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
-            });
+            PclUi.AnimateWindowIn(window, shell, 150);
             ok.Focus();
         };
 
+        // Keep the first frame invisible; Loaded starts the fade.
+        window.Opacity = 0;
         window.ShowDialog();
         return result;
     }
